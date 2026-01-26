@@ -39,7 +39,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <driver/i2s.h>
-#include "heltec.h"
+#include <U8g2lib.h>  // Install "U8g2" from Library Manager
 
 // ============================================================================
 // Configuration
@@ -57,13 +57,17 @@
 
 // Button pins (Heltec V4)
 #define TRIGGER_BTN_PIN   0     // PRG button (directly on board)
-#define WAVEFORM_BTN_PIN  47    // External button (directly by display)
+#define WAVEFORM_BTN_PIN  47    // External button
 #define PITCHENV_BTN_PIN  48    // External button
 
-// OLED pins (Heltec V4 built-in - directly managed internally)
+// OLED pins (Heltec V4 built-in SSD1306 128x64)
 #define OLED_SDA          17
 #define OLED_SCL          18
 #define OLED_RST          21
+
+// Initialize OLED display (SSD1306 128x64 I2C)
+// Using software I2C to specify custom pins
+U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, OLED_SCL, OLED_SDA, OLED_RST);
 
 // ============================================================================
 // DSP Constants
@@ -859,45 +863,45 @@ const char* getPitchEnvName(int index) {
 }
 
 void drawNormalDisplay() {
-    // Title
-    Heltec.display->setFont(ArialMT_Plain_16);
-    Heltec.display->drawString(0, 0, "DUB SIREN");
+    // Title (large font)
+    u8g2.setFont(u8g2_font_helvB14_tr);
+    u8g2.drawStr(0, 14, "DUB SIREN");
 
-    // Status
-    Heltec.display->setFont(ArialMT_Plain_10);
+    // Status (smaller font)
+    u8g2.setFont(u8g2_font_helvR08_tr);
 
     // Waveform
-    String wfStr = "Wave: ";
-    wfStr += getWaveformName(waveformIndex);
-    Heltec.display->drawString(0, 20, wfStr);
+    char wfStr[24];
+    snprintf(wfStr, sizeof(wfStr), "Wave: %s", getWaveformName(waveformIndex));
+    u8g2.drawStr(0, 28, wfStr);
 
     // Pitch Envelope
-    String peStr = "Pitch: ";
-    peStr += getPitchEnvName(pitchEnvIndex);
-    Heltec.display->drawString(0, 32, peStr);
+    char peStr[24];
+    snprintf(peStr, sizeof(peStr), "Pitch: %s", getPitchEnvName(pitchEnvIndex));
+    u8g2.drawStr(0, 40, peStr);
 
     // Active state
     if (sirenActive) {
-        Heltec.display->drawString(0, 44, ">>> ACTIVE <<<");
+        u8g2.drawStr(0, 54, ">>> ACTIVE <<<");
     } else {
-        Heltec.display->drawString(0, 44, "Press PRG to trigger");
+        u8g2.drawStr(0, 54, "Press PRG to trigger");
     }
 }
 
 void drawOscilloscope() {
     // Draw title bar
-    Heltec.display->setFont(ArialMT_Plain_10);
-    Heltec.display->drawString(0, 0, getWaveformName(waveformIndex));
+    u8g2.setFont(u8g2_font_helvR08_tr);
+    u8g2.drawStr(0, 10, getWaveformName(waveformIndex));
 
     // Draw active indicator
     if (sirenActive) {
-        Heltec.display->drawString(80, 0, "[PLAY]");
+        u8g2.drawStr(80, 10, "[PLAY]");
     }
 
-    // Draw center line (zero crossing)
-    int centerY = 40;  // Center of waveform display area
+    // Draw center line (zero crossing) - dotted
+    int centerY = 40;
     for (int x = 0; x < 128; x += 4) {
-        Heltec.display->setPixel(x, centerY);
+        u8g2.drawPixel(x, centerY);
     }
 
     // Draw waveform from scope buffer
@@ -907,29 +911,27 @@ void drawOscilloscope() {
         int idx = (scopeWriteIdx + x) % SCOPE_WIDTH;
         int8_t sample = scopeBuffer[idx];
 
-        // Scale sample (-128 to 127) to display area (16 to 64 pixels)
-        // Display area is 48 pixels tall (from y=16 to y=64)
+        // Scale sample (-128 to 127) to display area
         int y = centerY - (sample * 20 / 128);  // Scale to +/- 20 pixels
         y = constrain(y, 14, 62);
 
         // Draw line from previous point for smooth waveform
         if (x > 0) {
-            Heltec.display->drawLine(x - 1, prevY, x, y);
+            u8g2.drawLine(x - 1, prevY, x, y);
         }
         prevY = y;
     }
 
     // Draw border
-    Heltec.display->drawRect(0, 12, 128, 52);
+    u8g2.drawFrame(0, 12, 128, 52);
 }
 
 void drawDebugLog() {
-    Heltec.display->setFont(ArialMT_Plain_10);
-    Heltec.display->drawString(0, 0, "=== DEBUG LOG ===");
+    u8g2.setFont(u8g2_font_helvR08_tr);
+    u8g2.drawStr(0, 10, "=== DEBUG LOG ===");
 
     // Draw log messages
-    Heltec.display->setFont(ArialMT_Plain_10);
-    int y = 14;
+    int y = 22;
     for (int i = 0; i < debugLogCount && i < MAX_LOG_LINES; i++) {
         // Calculate index to read from (oldest first)
         int idx;
@@ -938,7 +940,7 @@ void drawDebugLog() {
         } else {
             idx = (debugLogHead + i) % MAX_LOG_LINES;
         }
-        Heltec.display->drawString(0, y, debugLog[idx]);
+        u8g2.drawStr(0, y, debugLog[idx]);
         y += 10;
     }
 
@@ -947,12 +949,13 @@ void drawDebugLog() {
     if (debugLogExpiry > millis()) {
         remaining = (debugLogExpiry - millis()) / 1000 + 1;
     }
-    String timeStr = "Auto-close: " + String(remaining) + "s";
-    Heltec.display->drawString(0, 54, timeStr);
+    char timeStr[24];
+    snprintf(timeStr, sizeof(timeStr), "Auto-close: %lus", remaining);
+    u8g2.drawStr(0, 62, timeStr);
 }
 
 void updateOLED() {
-    Heltec.display->clear();
+    u8g2.clearBuffer();
 
     switch (currentDisplayMode) {
         case DisplayMode::Normal:
@@ -966,7 +969,7 @@ void updateOLED() {
             break;
     }
 
-    Heltec.display->display();
+    u8g2.sendBuffer();
 }
 
 // ============================================================================
@@ -1062,8 +1065,15 @@ void setup() {
     Serial.println("\n=== Dub Siren ESP32 ===");
     Serial.println("Heltec WiFi LoRa 32 V4");
 
-    // Initialize Heltec board (display, etc.)
-    Heltec.begin(true /*DisplayEnable*/, false /*LoRaEnable*/, true /*SerialEnable*/);
+    // Initialize OLED display
+    u8g2.begin();
+    u8g2.setContrast(255);  // Max brightness
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_helvB14_tr);
+    u8g2.drawStr(20, 35, "DUB SIREN");
+    u8g2.setFont(u8g2_font_helvR08_tr);
+    u8g2.drawStr(30, 50, "Initializing...");
+    u8g2.sendBuffer();
 
     // Configure buttons
     pinMode(TRIGGER_BTN_PIN, INPUT_PULLUP);

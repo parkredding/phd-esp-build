@@ -205,22 +205,28 @@ A classic dub siren synthesizer running on the ESP32 Heltec V4 board with I2S au
 ### 1. Install Arduino IDE
 Download and install [Arduino IDE 2.x](https://www.arduino.cc/en/software)
 
-### 2. Add Heltec ESP32 Board Support
+### 2. Add ESP32 Board Support
 
 1. Open Arduino IDE
 2. Go to **File → Preferences**
 3. Add this URL to "Additional Board Manager URLs":
    ```
-   https://github.com/Heltec-Aaron-Lee/WiFi_Kit_series/releases/download/0.0.9/package_heltec_esp32_index.json
+   https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
    ```
 4. Go to **Tools → Board → Boards Manager**
-5. Search for "Heltec" and install **Heltec ESP32 Series Dev-boards**
+5. Search for "esp32" and install **ESP32 by Espressif Systems**
+
+### 2b. Install Required Library
+
+1. Go to **Sketch → Include Library → Manage Libraries**
+2. Search for "U8g2" and install **U8g2 by oliver** (universal graphics library)
+3. This library handles the OLED display
 
 ### 3. Select Board Settings
 
 | Setting          | Value                    |
 |------------------|--------------------------|
-| Board            | WiFi LoRa 32 (V4)        |
+| Board            | ESP32S3 Dev Module       |
 | Upload Speed     | 921600                   |
 | CPU Frequency    | 240MHz (WiFi)            |
 | Flash Frequency  | 80MHz                    |
@@ -471,7 +477,7 @@ audioEngine.setFrequency(frequency);
 
 1. **Reset the board** - Press RST button
 2. **Check Heltec library** - Ensure correct version is installed
-3. **Verify board selection** - Must be "WiFi LoRa 32 (V4)"
+3. **Verify board selection** - Use "ESP32S3 Dev Module"
 
 ### Button Not Responding
 
@@ -482,7 +488,7 @@ audioEngine.setFrequency(frequency);
 ### Compilation Errors
 
 1. **Install Heltec library** - Follow board installation steps
-2. **Select correct board** - "WiFi LoRa 32 (V4)"
+2. **Select correct board** - "ESP32S3 Dev Module"
 3. **Update Arduino IDE** - Use version 2.x
 
 ---
