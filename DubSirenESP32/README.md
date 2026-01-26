@@ -1,6 +1,6 @@
-# Dub Siren ESP32 - Heltec WiFi LoRa 32 V3
+# Dub Siren ESP32 - Heltec WiFi LoRa 32 V4
 
-A classic dub siren synthesizer running on the ESP32 Heltec V3 board with I2S audio output, OLED display, and button controls.
+A classic dub siren synthesizer running on the ESP32 Heltec V4 board with I2S audio output, OLED display, and button controls.
 
 ## Features
 
@@ -16,7 +16,7 @@ A classic dub siren synthesizer running on the ESP32 Heltec V3 board with I2S au
 ## Hardware Requirements
 
 ### Required
-- **Heltec WiFi LoRa 32 V3** (ESP32-S3 based)
+- **Heltec WiFi LoRa 32 V4** (ESP32-S3 based)
 - **I2S DAC Module** (PCM5102 recommended) or use internal DAC
 - **Speaker/Amplifier** connected to DAC output
 - **USB-C Cable** for programming and power
@@ -30,11 +30,11 @@ A classic dub siren synthesizer running on the ESP32 Heltec V3 board with I2S au
 
 ## GPIO Pinout Diagram
 
-### Heltec WiFi LoRa 32 V3 Board Layout
+### Heltec WiFi LoRa 32 V4 Board Layout
 
 ```
                     ┌──────────────────────────────────────┐
-                    │         HELTEC WiFi LoRa 32 V3       │
+                    │         HELTEC WiFi LoRa 32 V4       │
                     │                                      │
                     │  ┌────────────────────────────────┐  │
                     │  │                                │  │
@@ -47,13 +47,13 @@ A classic dub siren synthesizer running on the ESP32 Heltec V3 board with I2S au
     ┌───────────────┤                                      ├───────────────┐
     │               │      [RST]           [PRG]           │               │
     │               │                                      │               │
-    │   GPIO 0  ────┤ 0                                 Vext├──── Vext     │
+    │   GPIO 0  ────┤ 0   ◄── TRIGGER                   Vext├──── Vext     │
     │   GPIO 1  ────┤ 1                                  GND├──── GND      │
     │   GPIO 2  ────┤ 2                                   36├──── GPIO 36  │
     │   GPIO 3  ────┤ 3                                   35├──── GPIO 35  │
-    │   GPIO 4* ────┤ 4  ◄── I2S DATA                     48├──── GPIO 48* │
-    │   GPIO 5* ────┤ 5  ◄── I2S BCK                      47├──── GPIO 47* │
-    │   GPIO 6* ────┤ 6  ◄── I2S WS                       26├──── GPIO 26  │
+    │   GPIO 4* ────┤ 4   ◄── I2S DATA                    48├──── GPIO 48* │
+    │   GPIO 5* ────┤ 5   ◄── I2S BCK                     47├──── GPIO 47* │
+    │   GPIO 6* ────┤ 6   ◄── I2S WS                      26├──── GPIO 26  │
     │   GPIO 7  ────┤ 7                                   33├──── GPIO 33  │
     │   GND     ────┤ GND                                 34├──── GPIO 34  │
     │   5V      ────┤ 5V                                  37├──── GPIO 37  │
@@ -84,11 +84,11 @@ A classic dub siren synthesizer running on the ESP32 Heltec V3 board with I2S au
 
 ### Built-in OLED Display Pins (Internal - Do Not Use)
 
-| Function    | GPIO | Note                    |
-|-------------|------|-------------------------|
-| OLED SDA    | 17   | I2C Data (internal)     |
-| OLED SCL    | 18   | I2C Clock (internal)    |
-| OLED RST    | 21   | Reset (internal)        |
+| Function    | GPIO | Note                         |
+|-------------|------|------------------------------|
+| OLED SDA    | 17   | I2C Data (managed by Heltec) |
+| OLED SCL    | 18   | I2C Clock (managed by Heltec)|
+| OLED RST    | 21   | Reset (managed by Heltec)    |
 
 ---
 
@@ -97,7 +97,7 @@ A classic dub siren synthesizer running on the ESP32 Heltec V3 board with I2S au
 ### PCM5102 DAC Module Connection
 
 ```
-    HELTEC V3                         PCM5102 DAC MODULE
+    HELTEC V4                         PCM5102 DAC MODULE
     ─────────                         ──────────────────
 
         GPIO 5  ──────────────────────►  BCK  (Bit Clock)
@@ -138,7 +138,7 @@ A classic dub siren synthesizer running on the ESP32 Heltec V3 board with I2S au
                                     │  GND ●──────────────┐ │             │
 ┌─────────────────────┐             │  BCK ●            │ │             │
 │                     │             │  LCK ●            │ │             │
-│   HELTEC V3         │             │  DIN ●            │ │ ┌─────────┐ │
+│   HELTEC V4         │             │  DIN ●            │ │ ┌─────────┐ │
 │                     │             │  SCK ●            │ │ │         │ │
 │              GPIO 5 ├─────────────┼──────┘            │ │ │  3.5mm  │ │
 │              GPIO 6 ├─────────────┼──────┘            │ │ │  Jack   │ │
@@ -217,7 +217,7 @@ Download and install [Arduino IDE 2.x](https://www.arduino.cc/en/software)
 
 | Setting          | Value                    |
 |------------------|--------------------------|
-| Board            | WiFi LoRa 32 (V3)        |
+| Board            | WiFi LoRa 32 (V4)        |
 | Upload Speed     | 921600                   |
 | CPU Frequency    | 240MHz (WiFi)            |
 | Flash Frequency  | 80MHz                    |
@@ -228,7 +228,7 @@ Download and install [Arduino IDE 2.x](https://www.arduino.cc/en/software)
 
 ### 4. Upload the Sketch
 
-1. Connect Heltec V3 via USB-C
+1. Connect Heltec V4 via USB-C
 2. Select the correct COM port in **Tools → Port**
 3. Open `DubSirenESP32.ino`
 4. Click **Upload**
@@ -353,6 +353,45 @@ audioEngine.setReleaseTime(0.5f);        // Release in seconds
 #define PITCHENV_BTN_PIN  48
 ```
 
+### Using PSRAM for Longer Delays
+
+The Heltec V4 has 8MB of PSRAM. To use it for longer delay times:
+
+1. **Enable PSRAM** in Arduino IDE: Tools → PSRAM → "OPI PSRAM"
+
+2. **Modify the delay buffer allocation** in the code:
+
+```cpp
+// At the top of the file, add:
+#include "esp_heap_caps.h"
+
+// Replace the DelayEffect class buffer with dynamic allocation:
+class DelayEffect {
+public:
+    DelayEffect(int sr = SAMPLE_RATE) : ... {
+        // Allocate 1 second buffer in PSRAM (176KB)
+        buffer = (float*)heap_caps_malloc(44100 * sizeof(float), MALLOC_CAP_SPIRAM);
+        if (buffer) {
+            maxDelaySamples = 44100;
+            memset(buffer, 0, 44100 * sizeof(float));
+        }
+    }
+    ~DelayEffect() {
+        if (buffer) heap_caps_free(buffer);
+    }
+private:
+    float* buffer;
+    int maxDelaySamples;
+};
+```
+
+3. **Update delay time limit:**
+```cpp
+void setDelayTime(float timeSeconds) {
+    delayTime = clampF(timeSeconds, 0.001f, 1.0f);  // Now supports 1 second
+}
+```
+
 ### Adding Potentiometer Control
 
 To add analog control (e.g., for frequency):
@@ -389,7 +428,7 @@ audioEngine.setFrequency(frequency);
 
 1. **Reset the board** - Press RST button
 2. **Check Heltec library** - Ensure correct version is installed
-3. **Verify board selection** - Must be "WiFi LoRa 32 (V3)"
+3. **Verify board selection** - Must be "WiFi LoRa 32 (V4)"
 
 ### Button Not Responding
 
@@ -400,20 +439,32 @@ audioEngine.setFrequency(frequency);
 ### Compilation Errors
 
 1. **Install Heltec library** - Follow board installation steps
-2. **Select correct board** - "WiFi LoRa 32 (V3)"
+2. **Select correct board** - "WiFi LoRa 32 (V4)"
 3. **Update Arduino IDE** - Use version 2.x
 
 ---
 
 ## Memory Usage
 
-| Resource        | Used      | Available | Usage |
+| Resource        | Size      | Notes                              |
+|-----------------|-----------|-------------------------------------|
+| Flash           | ~450 KB   | 11% of 4 MB                        |
+| **RAM Total**   | ~70 KB    | Fits in 320 KB available           |
+| Delay Buffer    | 60 KB     | 15,435 samples × 4 bytes (0.35s)   |
+| Reverb Buffer   | 8 KB      | 2,048 samples × 4 bytes            |
+| Audio Buffer    | 1 KB      | 256 stereo samples                 |
+| Other           | ~1 KB     | Variables, objects                 |
+
+### ESP32-S3 (Heltec V4) Memory
+
+| Type            | Total     | Available | Used  |
 |-----------------|-----------|-----------|-------|
-| Flash           | ~450 KB   | 4 MB      | 11%   |
-| RAM             | ~180 KB   | 320 KB    | 56%   |
-| Delay Buffer    | 88 KB     | -         | -     |
-| Reverb Buffer   | 16 KB     | -         | -     |
-| Audio Buffer    | 1 KB      | -         | -     |
+| Internal SRAM   | 512 KB    | ~320 KB   | ~70 KB (22%) |
+| PSRAM           | 8 MB      | 8 MB      | Not used     |
+| Flash           | 8 MB      | ~4 MB     | ~450 KB      |
+
+**Note:** The delay buffer was reduced from 1 second to 0.35 seconds to fit within
+ESP32 RAM constraints. For longer delay times, PSRAM can be enabled (see Customization).
 
 ---
 
@@ -438,4 +489,4 @@ This project is open source. See LICENSE file for details.
 
 ## Credits
 
-Converted from the Raspberry Pi Dub Siren project for ESP32 Heltec V3.
+Converted from the Raspberry Pi Dub Siren project for ESP32 Heltec V4.

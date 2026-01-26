@@ -1,11 +1,11 @@
 /**
- * Dub Siren ESP32 - Heltec WiFi LoRa 32 V3
+ * Dub Siren ESP32 - Heltec WiFi LoRa 32 V4
  *
  * A dub siren synthesizer for ESP32 with I2S audio output.
- * Designed for Heltec V3 board with built-in OLED display.
+ * Designed for Heltec V4 board with built-in OLED display.
  *
  * Hardware:
- * - Heltec WiFi LoRa 32 V3 (ESP32-S3)
+ * - Heltec WiFi LoRa 32 V4 (ESP32-S3)
  * - External I2S DAC (PCM5102 recommended) or internal DAC
  * - Optional: trigger button, potentiometers
  *
@@ -21,8 +21,8 @@
  *
  * Controls:
  * - PRG Button (GPIO 0): Trigger/Release siren
- * - GPIO 47: Cycle waveform
- * - GPIO 48: Cycle pitch envelope mode
+ * - GPIO 47: Cycle waveform (optional external button)
+ * - GPIO 48: Cycle pitch envelope mode (optional external)
  */
 
 #include <Arduino.h>
@@ -39,17 +39,17 @@
 #define BUFFER_SIZE       256
 #define I2S_NUM           I2S_NUM_0
 
-// I2S pins for Heltec V3
+// I2S pins for Heltec V4
 #define I2S_BCK_PIN       5
 #define I2S_WS_PIN        6
 #define I2S_DATA_PIN      4
 
-// Button pins
-#define TRIGGER_BTN_PIN   0     // PRG button on Heltec
-#define WAVEFORM_BTN_PIN  47    // Optional external button
-#define PITCHENV_BTN_PIN  48    // Optional external button
+// Button pins (Heltec V4)
+#define TRIGGER_BTN_PIN   0     // PRG button (directly on board)
+#define WAVEFORM_BTN_PIN  47    // External button (directly by display)
+#define PITCHENV_BTN_PIN  48    // External button
 
-// OLED pins (Heltec V3 built-in)
+// OLED pins (Heltec V4 built-in - directly managed internally)
 #define OLED_SDA          17
 #define OLED_SCL          18
 #define OLED_RST          21
@@ -371,16 +371,18 @@ private:
 };
 
 // ============================================================================
-// Delay Effect Class (Simplified for ESP32 RAM constraints)
+// Delay Effect Class (Optimized for ESP32 RAM constraints)
 // ============================================================================
 
-#define MAX_DELAY_SAMPLES (SAMPLE_RATE)  // 1 second max delay
+// Reduced to 0.35 seconds max delay to fit in ESP32 RAM
+// At 44100 Hz: 0.35s = 15,435 samples × 4 bytes = ~60KB
+#define MAX_DELAY_SAMPLES 15435
 
 class DelayEffect {
 public:
     DelayEffect(int sr = SAMPLE_RATE)
-        : sampleRate(sr), writePos(0), delayTime(0.3f), feedback(0.3f), dryWet(0.3f),
-          currentDelaySamples(sr * 0.3f), hpState(0.0f), lpState(0.0f),
+        : sampleRate(sr), writePos(0), delayTime(0.25f), feedback(0.3f), dryWet(0.3f),
+          currentDelaySamples(sr * 0.25f), hpState(0.0f), lpState(0.0f),
           modPhase(0.0f), modDepth(0.003f), modRate(0.5f) {
         memset(buffer, 0, sizeof(buffer));
     }
@@ -434,7 +436,7 @@ public:
         return input * (1.0f - dryWet) + delayed * dryWet;
     }
 
-    void setDelayTime(float timeSeconds) { delayTime = clampF(timeSeconds, 0.001f, 1.0f); }
+    void setDelayTime(float timeSeconds) { delayTime = clampF(timeSeconds, 0.001f, 0.35f); }
     void setFeedback(float fb) { feedback = clampF(fb, 0.0f, 0.95f); }
     void setDryWet(float mix) { dryWet = clampF(mix, 0.0f, 1.0f); }
 
@@ -457,7 +459,8 @@ private:
 // Simple Reverb Effect (Optimized for ESP32)
 // ============================================================================
 
-#define REVERB_BUFFER_SIZE 4096
+// 2048 samples × 4 bytes = 8KB
+#define REVERB_BUFFER_SIZE 2048
 
 class SimpleReverb {
 public:
@@ -858,7 +861,7 @@ void audioTask(void *pvParameters) {
 void setup() {
     Serial.begin(115200);
     Serial.println("\n=== Dub Siren ESP32 ===");
-    Serial.println("Heltec WiFi LoRa 32 V3");
+    Serial.println("Heltec WiFi LoRa 32 V4");
 
     // Initialize Heltec board (display, etc.)
     Heltec.begin(true /*DisplayEnable*/, false /*LoRaEnable*/, true /*SerialEnable*/);
