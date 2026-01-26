@@ -8,7 +8,10 @@ A classic dub siren synthesizer running on the ESP32 Heltec V4 board with I2S au
 - **Pitch Envelope**: None, Up (rising pitch on release), Down (falling pitch on release)
 - **Effects**: Low-pass filter with LFO modulation, Delay with feedback, Reverb
 - **Real-time Audio**: 44.1kHz sample rate via I2S
-- **OLED Display**: Shows current settings and status
+- **Smart OLED Display**:
+  - Normal mode: Shows synth parameters
+  - Oscilloscope mode: Real-time waveform (auto after 1s idle)
+  - Debug mode: Error/status log (auto-dismiss after 3s)
 - **Multiple Control Options**: Physical buttons and serial commands
 
 ---
@@ -263,8 +266,14 @@ Download and install [Arduino IDE 2.x](https://www.arduino.cc/en/software)
 | `7`     | Set frequency to 659 Hz (E5)    |
 | `8`     | Set frequency to 784 Hz (G5)    |
 | `9`     | Set frequency to 880 Hz (A5)    |
+| `d`     | Test debug display              |
 
-### OLED Display
+### OLED Display Modes
+
+The display automatically switches between three modes:
+
+#### 1. Normal Mode (Default)
+Shows synth parameters and status. Returns here when you interact with controls.
 
 ```
 ┌────────────────────────┐
@@ -273,9 +282,43 @@ Download and install [Arduino IDE 2.x](https://www.arduino.cc/en/software)
 │  Wave: SQUARE          │  ← Current waveform
 │  Pitch: UP             │  ← Pitch envelope mode
 │                        │
-│  >>> ACTIVE <<<        │  ← Status (or "Press PRG to trigger")
+│  >>> ACTIVE <<<        │  ← Status
 └────────────────────────┘
 ```
+
+#### 2. Oscilloscope Mode (Auto after 1s idle)
+Real-time waveform visualization. Activates automatically when no controls are touched for 1 second.
+
+```
+┌────────────────────────┐
+│ SQUARE         [PLAY]  │  ← Waveform & status
+│┌──────────────────────┐│
+││      ╱╲      ╱╲      ││
+││     ╱  ╲    ╱  ╲     ││  ← Live audio waveform
+││────╱────╲──╱────╲────││  ← Center line (zero)
+││   ╱      ╲╱      ╲   ││
+│└──────────────────────┘│
+└────────────────────────┘
+```
+
+#### 3. Debug Mode (On errors/messages)
+Shows debug log messages. Auto-dismisses after 3 seconds.
+
+```
+┌────────────────────────┐
+│ === DEBUG LOG ===      │
+│ I2S initialized        │
+│ System ready!          │
+│ Freq: 440Hz A4         │
+│                        │
+│ Auto-close: 2s         │  ← Countdown timer
+└────────────────────────┘
+```
+
+**Mode Transitions:**
+- Any button press or serial command → Normal mode
+- 1 second of inactivity → Oscilloscope mode
+- Debug message logged → Debug mode (3s timeout)
 
 ---
 

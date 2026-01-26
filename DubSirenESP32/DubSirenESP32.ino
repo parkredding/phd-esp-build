@@ -4,6 +4,12 @@
  * A dub siren synthesizer for ESP32 with I2S audio output.
  * Designed for Heltec V4 board with built-in OLED display.
  *
+ * Features:
+ * - Real-time oscilloscope display (auto-activates after 1s idle)
+ * - Debug log display on OLED for troubleshooting
+ * - Multiple waveforms with anti-aliasing
+ * - Delay and reverb effects
+ *
  * Hardware:
  * - Heltec WiFi LoRa 32 V4 (ESP32-S3)
  * - External I2S DAC (PCM5102 recommended) or internal DAC
@@ -23,6 +29,11 @@
  * - PRG Button (GPIO 0): Trigger/Release siren
  * - GPIO 47: Cycle waveform (optional external button)
  * - GPIO 48: Cycle pitch envelope mode (optional external)
+ *
+ * Display Modes:
+ * - Normal: Shows waveform, pitch envelope, status
+ * - Oscilloscope: Auto-shows after 1s idle, displays live waveform
+ * - Debug: Shows log messages for 3s when errors occur
  */
 
 #include <Arduino.h>
@@ -701,6 +712,99 @@ const unsigned long debounceDelay = 50;
 int16_t audioBuffer[BUFFER_SIZE * 2];  // Stereo
 
 // ============================================================================
+// Display Mode & Debug Log System
+// ============================================================================
+
+enum class DisplayMode {
+    Normal,       // Shows waveform, pitch env, status
+    Oscilloscope, // Shows audio waveform visualization
+    Debug         // Shows debug/error messages
+};
+
+volatile DisplayMode currentDisplayMode = DisplayMode::Normal;
+unsigned long lastInteractionTime = 0;
+const unsigned long OSCILLOSCOPE_TIMEOUT = 1000;  // 1 second
+
+// Debug log system - circular buffer of messages
+#define MAX_LOG_LINES 5
+#define MAX_LOG_LENGTH 22  // Fits on 128px wide OLED with small font
+char debugLog[MAX_LOG_LINES][MAX_LOG_LENGTH];
+int debugLogHead = 0;
+int debugLogCount = 0;
+unsigned long debugLogExpiry = 0;
+const unsigned long DEBUG_DISPLAY_TIME = 3000;  // Show debug for 3 seconds
+
+// Oscilloscope buffer - stores samples for visualization
+#define SCOPE_WIDTH 128   // OLED width
+volatile int8_t scopeBuffer[SCOPE_WIDTH];
+volatile int scopeWriteIdx = 0;
+volatile bool scopeBufferReady = false;
+
+// Add a debug message to the log
+void debugPrint(const char* msg) {
+    // Copy to circular buffer
+    strncpy(debugLog[debugLogHead], msg, MAX_LOG_LENGTH - 1);
+    debugLog[debugLogHead][MAX_LOG_LENGTH - 1] = '\0';
+
+    debugLogHead = (debugLogHead + 1) % MAX_LOG_LINES;
+    if (debugLogCount < MAX_LOG_LINES) debugLogCount++;
+
+    // Set expiry time and switch to debug mode
+    debugLogExpiry = millis() + DEBUG_DISPLAY_TIME;
+    currentDisplayMode = DisplayMode::Debug;
+    updateDisplay = true;
+
+    // Also print to serial
+    Serial.print("[DEBUG] ");
+    Serial.println(msg);
+}
+
+// Log with formatting (limited to simple cases)
+void debugPrintf(const char* fmt, int value) {
+    char buf[MAX_LOG_LENGTH];
+    snprintf(buf, MAX_LOG_LENGTH, fmt, value);
+    debugPrint(buf);
+}
+
+void debugPrintf(const char* fmt, const char* str) {
+    char buf[MAX_LOG_LENGTH];
+    snprintf(buf, MAX_LOG_LENGTH, fmt, str);
+    debugPrint(buf);
+}
+
+// Record user interaction (resets oscilloscope timer)
+void recordInteraction() {
+    lastInteractionTime = millis();
+    if (currentDisplayMode == DisplayMode::Oscilloscope) {
+        currentDisplayMode = DisplayMode::Normal;
+        updateDisplay = true;
+    }
+}
+
+// Check if we should switch to oscilloscope mode
+void checkDisplayMode() {
+    unsigned long now = millis();
+
+    // If in debug mode, check if it should expire
+    if (currentDisplayMode == DisplayMode::Debug) {
+        if (now > debugLogExpiry) {
+            currentDisplayMode = DisplayMode::Normal;
+            lastInteractionTime = now;  // Reset interaction timer
+            updateDisplay = true;
+        }
+        return;
+    }
+
+    // If no interaction for OSCILLOSCOPE_TIMEOUT, switch to oscilloscope
+    if (currentDisplayMode == DisplayMode::Normal) {
+        if ((now - lastInteractionTime) > OSCILLOSCOPE_TIMEOUT) {
+            currentDisplayMode = DisplayMode::Oscilloscope;
+            updateDisplay = true;
+        }
+    }
+}
+
+// ============================================================================
 // I2S Setup
 // ============================================================================
 
@@ -754,9 +858,7 @@ const char* getPitchEnvName(int index) {
     }
 }
 
-void updateOLED() {
-    Heltec.display->clear();
-
+void drawNormalDisplay() {
     // Title
     Heltec.display->setFont(ArialMT_Plain_16);
     Heltec.display->drawString(0, 0, "DUB SIREN");
@@ -780,6 +882,89 @@ void updateOLED() {
     } else {
         Heltec.display->drawString(0, 44, "Press PRG to trigger");
     }
+}
+
+void drawOscilloscope() {
+    // Draw title bar
+    Heltec.display->setFont(ArialMT_Plain_10);
+    Heltec.display->drawString(0, 0, getWaveformName(waveformIndex));
+
+    // Draw active indicator
+    if (sirenActive) {
+        Heltec.display->drawString(80, 0, "[PLAY]");
+    }
+
+    // Draw center line (zero crossing)
+    int centerY = 40;  // Center of waveform display area
+    for (int x = 0; x < 128; x += 4) {
+        Heltec.display->setPixel(x, centerY);
+    }
+
+    // Draw waveform from scope buffer
+    int prevY = centerY;
+    for (int x = 0; x < SCOPE_WIDTH; x++) {
+        // Read from buffer with offset to get continuous waveform
+        int idx = (scopeWriteIdx + x) % SCOPE_WIDTH;
+        int8_t sample = scopeBuffer[idx];
+
+        // Scale sample (-128 to 127) to display area (16 to 64 pixels)
+        // Display area is 48 pixels tall (from y=16 to y=64)
+        int y = centerY - (sample * 20 / 128);  // Scale to +/- 20 pixels
+        y = constrain(y, 14, 62);
+
+        // Draw line from previous point for smooth waveform
+        if (x > 0) {
+            Heltec.display->drawLine(x - 1, prevY, x, y);
+        }
+        prevY = y;
+    }
+
+    // Draw border
+    Heltec.display->drawRect(0, 12, 128, 52);
+}
+
+void drawDebugLog() {
+    Heltec.display->setFont(ArialMT_Plain_10);
+    Heltec.display->drawString(0, 0, "=== DEBUG LOG ===");
+
+    // Draw log messages
+    Heltec.display->setFont(ArialMT_Plain_10);
+    int y = 14;
+    for (int i = 0; i < debugLogCount && i < MAX_LOG_LINES; i++) {
+        // Calculate index to read from (oldest first)
+        int idx;
+        if (debugLogCount < MAX_LOG_LINES) {
+            idx = i;
+        } else {
+            idx = (debugLogHead + i) % MAX_LOG_LINES;
+        }
+        Heltec.display->drawString(0, y, debugLog[idx]);
+        y += 10;
+    }
+
+    // Show remaining time
+    unsigned long remaining = 0;
+    if (debugLogExpiry > millis()) {
+        remaining = (debugLogExpiry - millis()) / 1000 + 1;
+    }
+    String timeStr = "Auto-close: " + String(remaining) + "s";
+    Heltec.display->drawString(0, 54, timeStr);
+}
+
+void updateOLED() {
+    Heltec.display->clear();
+
+    switch (currentDisplayMode) {
+        case DisplayMode::Normal:
+            drawNormalDisplay();
+            break;
+        case DisplayMode::Oscilloscope:
+            drawOscilloscope();
+            break;
+        case DisplayMode::Debug:
+            drawDebugLog();
+            break;
+    }
 
     Heltec.display->display();
 }
@@ -795,6 +980,7 @@ void handleButtons() {
     bool triggerState = digitalRead(TRIGGER_BTN_PIN);
     if (triggerState != lastTriggerState && (currentTime - lastDebounceTime) > debounceDelay) {
         lastDebounceTime = currentTime;
+        recordInteraction();  // Reset oscilloscope timer
         if (triggerState == LOW) {
             // Button pressed
             audioEngine.trigger();
@@ -813,6 +999,7 @@ void handleButtons() {
     bool waveformState = digitalRead(WAVEFORM_BTN_PIN);
     if (waveformState != lastWaveformState && (currentTime - lastDebounceTime) > debounceDelay) {
         lastDebounceTime = currentTime;
+        recordInteraction();  // Reset oscilloscope timer
         if (waveformState == LOW) {
             waveformIndex = audioEngine.cycleWaveform();
             updateDisplay = true;
@@ -824,6 +1011,7 @@ void handleButtons() {
     bool pitchEnvState = digitalRead(PITCHENV_BTN_PIN);
     if (pitchEnvState != lastPitchEnvState && (currentTime - lastDebounceTime) > debounceDelay) {
         lastDebounceTime = currentTime;
+        recordInteraction();  // Reset oscilloscope timer
         if (pitchEnvState == LOW) {
             audioEngine.cyclePitchEnvelope();
             pitchEnvIndex = (pitchEnvIndex + 1) % 3;
@@ -839,6 +1027,8 @@ void handleButtons() {
 
 void audioTask(void *pvParameters) {
     size_t bytesWritten;
+    int scopeSampleCounter = 0;
+    const int SCOPE_DOWNSAMPLE = SAMPLE_RATE / SCOPE_WIDTH / 30;  // ~30 fps update
 
     while (true) {
         // Generate audio buffer
@@ -847,6 +1037,15 @@ void audioTask(void *pvParameters) {
             int16_t sampleInt = (int16_t)(sample * 32767.0f);
             audioBuffer[i * 2] = sampleInt;      // Left
             audioBuffer[i * 2 + 1] = sampleInt;  // Right
+
+            // Capture samples for oscilloscope (downsampled)
+            scopeSampleCounter++;
+            if (scopeSampleCounter >= SCOPE_DOWNSAMPLE) {
+                scopeSampleCounter = 0;
+                // Convert to 8-bit for display (-128 to 127)
+                scopeBuffer[scopeWriteIdx] = (int8_t)(sample * 127.0f);
+                scopeWriteIdx = (scopeWriteIdx + 1) % SCOPE_WIDTH;
+            }
         }
 
         // Write to I2S
@@ -873,10 +1072,17 @@ void setup() {
 
     // Initialize I2S
     setupI2S();
-    Serial.println("I2S initialized");
+    debugPrint("I2S initialized");
+
+    // Initialize interaction timer
+    lastInteractionTime = millis();
+
+    // Initialize scope buffer
+    memset((void*)scopeBuffer, 0, sizeof(scopeBuffer));
 
     // Show initial display
     updateOLED();
+    debugPrint("System ready!");
 
     // Create audio task on Core 1
     xTaskCreatePinnedToCore(
@@ -899,12 +1105,21 @@ void setup() {
     Serial.println("  r - Release");
     Serial.println("  w - Cycle waveform");
     Serial.println("  p - Cycle pitch envelope");
+    Serial.println("  d - Test debug display");
     Serial.println("  1-9 - Set frequency (220-880 Hz)");
+    Serial.println("\nDisplay modes:");
+    Serial.println("  Normal    - Default status view");
+    Serial.println("  Scope     - Auto after 1s idle");
+    Serial.println("  Debug     - Shows on errors (3s)");
 }
 
 // ============================================================================
 // Main Loop (runs on Core 0)
 // ============================================================================
+
+// Oscilloscope refresh timing
+unsigned long lastScopeUpdate = 0;
+const unsigned long SCOPE_UPDATE_INTERVAL = 33;  // ~30 fps
 
 void loop() {
     // Handle physical buttons
@@ -913,50 +1128,64 @@ void loop() {
     // Handle serial commands
     if (Serial.available()) {
         char cmd = Serial.read();
+        recordInteraction();  // Any serial input counts as interaction
         switch (cmd) {
             case 't':
             case 'T':
                 audioEngine.trigger();
                 sirenActive = true;
                 updateDisplay = true;
-                Serial.println("Triggered!");
+                debugPrint("Triggered!");
                 break;
             case 'r':
             case 'R':
                 audioEngine.release();
                 sirenActive = false;
                 updateDisplay = true;
-                Serial.println("Released!");
+                debugPrint("Released!");
                 break;
             case 'w':
             case 'W':
                 waveformIndex = audioEngine.cycleWaveform();
                 updateDisplay = true;
-                Serial.print("Waveform: ");
-                Serial.println(getWaveformName(waveformIndex));
+                debugPrintf("Wave: %s", getWaveformName(waveformIndex));
                 break;
             case 'p':
             case 'P':
                 audioEngine.cyclePitchEnvelope();
                 pitchEnvIndex = (pitchEnvIndex + 1) % 3;
                 updateDisplay = true;
-                Serial.print("Pitch Env: ");
-                Serial.println(getPitchEnvName(pitchEnvIndex));
+                debugPrintf("Pitch: %s", getPitchEnvName(pitchEnvIndex));
                 break;
-            case '1': audioEngine.setFrequency(220.0f); Serial.println("Freq: 220Hz"); break;
-            case '2': audioEngine.setFrequency(261.63f); Serial.println("Freq: 261Hz (C4)"); break;
-            case '3': audioEngine.setFrequency(329.63f); Serial.println("Freq: 330Hz (E4)"); break;
-            case '4': audioEngine.setFrequency(392.0f); Serial.println("Freq: 392Hz (G4)"); break;
-            case '5': audioEngine.setFrequency(440.0f); Serial.println("Freq: 440Hz (A4)"); break;
-            case '6': audioEngine.setFrequency(523.25f); Serial.println("Freq: 523Hz (C5)"); break;
-            case '7': audioEngine.setFrequency(659.25f); Serial.println("Freq: 659Hz (E5)"); break;
-            case '8': audioEngine.setFrequency(783.99f); Serial.println("Freq: 784Hz (G5)"); break;
-            case '9': audioEngine.setFrequency(880.0f); Serial.println("Freq: 880Hz (A5)"); break;
+            case '1': audioEngine.setFrequency(220.0f); debugPrint("Freq: 220Hz"); break;
+            case '2': audioEngine.setFrequency(261.63f); debugPrint("Freq: 261Hz C4"); break;
+            case '3': audioEngine.setFrequency(329.63f); debugPrint("Freq: 330Hz E4"); break;
+            case '4': audioEngine.setFrequency(392.0f); debugPrint("Freq: 392Hz G4"); break;
+            case '5': audioEngine.setFrequency(440.0f); debugPrint("Freq: 440Hz A4"); break;
+            case '6': audioEngine.setFrequency(523.25f); debugPrint("Freq: 523Hz C5"); break;
+            case '7': audioEngine.setFrequency(659.25f); debugPrint("Freq: 659Hz E5"); break;
+            case '8': audioEngine.setFrequency(783.99f); debugPrint("Freq: 784Hz G5"); break;
+            case '9': audioEngine.setFrequency(880.0f); debugPrint("Freq: 880Hz A5"); break;
+            case 'd':
+            case 'D':
+                // Manual debug test
+                debugPrint("Debug test message");
+                break;
         }
     }
 
-    // Update display if needed
-    if (updateDisplay) {
+    // Check if display mode should change
+    checkDisplayMode();
+
+    // Update display based on mode
+    if (currentDisplayMode == DisplayMode::Oscilloscope) {
+        // Continuous update for oscilloscope at ~30fps
+        unsigned long now = millis();
+        if ((now - lastScopeUpdate) >= SCOPE_UPDATE_INTERVAL) {
+            lastScopeUpdate = now;
+            updateOLED();
+        }
+    } else if (updateDisplay) {
         updateOLED();
         updateDisplay = false;
     }
