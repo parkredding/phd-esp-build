@@ -64,6 +64,7 @@
 #define OLED_SDA          17
 #define OLED_SCL          18
 #define OLED_RST          21
+#define VEXT_PIN          36    // Vext control - must be LOW to power OLED
 
 // Initialize OLED display (SSD1306 128x64 I2C)
 // Using software I2C to specify custom pins
@@ -1061,11 +1062,30 @@ void audioTask(void *pvParameters) {
 // ============================================================================
 
 void setup() {
+    // Start serial FIRST for debugging
     Serial.begin(115200);
-    Serial.println("\n=== Dub Siren ESP32 ===");
+    delay(1000);  // Wait for serial to stabilize
+    Serial.println("\n\n=== Dub Siren ESP32 ===");
     Serial.println("Heltec WiFi LoRa 32 V4");
+    Serial.println("Starting initialization...");
+
+    // Enable Vext to power the OLED (Heltec specific)
+    // Vext must be LOW to enable power to peripherals
+    Serial.println("Enabling Vext...");
+    pinMode(VEXT_PIN, OUTPUT);
+    digitalWrite(VEXT_PIN, LOW);
+    delay(100);  // Wait for power to stabilize
+
+    // Reset OLED manually
+    Serial.println("Resetting OLED...");
+    pinMode(OLED_RST, OUTPUT);
+    digitalWrite(OLED_RST, LOW);
+    delay(50);
+    digitalWrite(OLED_RST, HIGH);
+    delay(50);
 
     // Initialize OLED display
+    Serial.println("Initializing display...");
     u8g2.begin();
     u8g2.setContrast(255);  // Max brightness
     u8g2.clearBuffer();
@@ -1074,13 +1094,16 @@ void setup() {
     u8g2.setFont(u8g2_font_helvR08_tr);
     u8g2.drawStr(30, 50, "Initializing...");
     u8g2.sendBuffer();
+    Serial.println("Display initialized!");
 
     // Configure buttons
+    Serial.println("Configuring buttons...");
     pinMode(TRIGGER_BTN_PIN, INPUT_PULLUP);
     pinMode(WAVEFORM_BTN_PIN, INPUT_PULLUP);
     pinMode(PITCHENV_BTN_PIN, INPUT_PULLUP);
 
     // Initialize I2S
+    Serial.println("Initializing I2S...");
     setupI2S();
     debugPrint("I2S initialized");
 
