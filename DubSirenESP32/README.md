@@ -35,63 +35,62 @@ A classic dub siren synthesizer running on the ESP32 Heltec V4 board with I2S au
 
 ### Heltec WiFi LoRa 32 V4 Board Layout
 
+Based on actual board silkscreen (USB-C at top, antenna at bottom):
+
 ```
+                              [USB-C Port]
                     ┌──────────────────────────────────────┐
-                    │         HELTEC WiFi LoRa 32 V4       │
+                    │              ┌─┐  V4                 │
+                    │              └─┘                     │
+     [RST]  ────────┤■                                     │
                     │                                      │
+     [PRG]  ────────┤■                                     │
                     │  ┌────────────────────────────────┐  │
                     │  │                                │  │
+                    │  │      HELTEC AUTOMATION         │  │
                     │  │         0.96" OLED             │  │
                     │  │         128 x 64               │  │
-                    │  │        (Built-in)              │  │
                     │  │                                │  │
                     │  └────────────────────────────────┘  │
                     │                                      │
-    ┌───────────────┤                                      ├───────────────┐
-    │               │      [RST]           [PRG]           │               │
-    │               │                                      │               │
-    │   GPIO 0  ────┤ 0   ◄── TRIGGER                   Vext├──── Vext     │
-    │   GPIO 1  ────┤ 1                                  GND├──── GND      │
-    │   GPIO 2  ────┤ 2                                   36├──── GPIO 36  │
-    │   GPIO 3  ────┤ 3                                   35├──── GPIO 35  │
-    │   GPIO 4* ────┤ 4   ◄── I2S DATA                    48├──── GPIO 48* │
-    │   GPIO 5* ────┤ 5   ◄── I2S BCK                     47├──── GPIO 47* │
-    │   GPIO 6* ────┤ 6   ◄── I2S WS                      26├──── GPIO 26  │
-    │   GPIO 7  ────┤ 7                                   33├──── GPIO 33  │
-    │   GND     ────┤ GND                                 34├──── GPIO 34  │
-    │   5V      ────┤ 5V                                  37├──── GPIO 37  │
-    │   3V3     ────┤ 3V3                                 38├──── GPIO 38  │
-    │   GPIO 19 ────┤ 19                                  39├──── GPIO 39  │
-    │   GPIO 20 ────┤ 20                                  40├──── GPIO 40  │
-    │   GPIO 21 ────┤ 21                                  41├──── GPIO 41  │
-    │   GPIO 45 ────┤ 45                                  42├──── GPIO 42  │
-    │   GPIO 46 ────┤ 46                                  GND├──── GND      │
-    │               │                                      │               │
-    └───────────────┤           [USB-C Port]               ├───────────────┘
+    ────────────────┼──────────────────────────────────────┼────────────────
+         Ve ────────┤ Vext                              2 ├──── GPIO 2
+        GND ────────┤ GND                               3 ├──── GPIO 3
+     GPIO 36 ───────┤ 36                                4*├──── GPIO 4  ◄── I2S DATA
+     GPIO 35 ───────┤ 35                                5*├──── GPIO 5  ◄── I2S BCK
+     GPIO 34 ───────┤ 34                                6*├──── GPIO 6  ◄── I2S WS
+     GPIO 33 ───────┤ 33                                7 ├──── GPIO 7
+     GPIO 26 ───────┤ 26                              GND ├──── GND
+     GPIO 21 ───────┤ 21                               5V ├──── 5V
+     GPIO 20 ───────┤ 20                              3V3 ├──── 3V3
+     GPIO 19 ───────┤ 19                                  │
                     │                                      │
-                    └──────────────────────────────────────┘
+                    │     ┌──┐                  ┌──┐       │
+                    │     │868                  │915       │
+                    └─────┴──┴──────────────────┴──┴───────┘
+                              [Antenna Connectors]
 
-    * = Used by this project
+    * = Used by this project for I2S audio
 ```
 
 ### Pin Assignments
 
-| Function          | GPIO | Description                        |
-|-------------------|------|------------------------------------|
-| **I2S BCK**       | 5    | Bit Clock to DAC                   |
-| **I2S WS**        | 6    | Word Select (LRCK) to DAC          |
-| **I2S DATA**      | 4    | Audio Data to DAC                  |
-| **Trigger Button**| 0    | PRG button (built-in, active LOW)  |
-| **Waveform Button**| 47  | Cycle waveforms (optional)         |
-| **Pitch Env Button**| 48 | Cycle pitch envelope (optional)    |
+| Function          | GPIO | Location    | Description                        |
+|-------------------|------|-------------|------------------------------------|
+| **I2S DATA**      | 4    | Right side  | Audio Data to DAC                  |
+| **I2S BCK**       | 5    | Right side  | Bit Clock to DAC                   |
+| **I2S WS**        | 6    | Right side  | Word Select (LRCK) to DAC          |
+| **Trigger Button**| 0    | PRG button  | Built-in, active LOW               |
+| **Vext Control**  | 36   | Left side   | Powers OLED (LOW=ON)               |
 
 ### Built-in OLED Display Pins (Internal - Do Not Use)
 
-| Function    | GPIO | Note                         |
-|-------------|------|------------------------------|
-| OLED SDA    | 17   | I2C Data (managed by Heltec) |
-| OLED SCL    | 18   | I2C Clock (managed by Heltec)|
-| OLED RST    | 21   | Reset (managed by Heltec)    |
+| Function    | GPIO | Note                              |
+|-------------|------|-----------------------------------|
+| OLED SDA    | 17   | I2C Data (directly internal)       |
+| OLED SCL    | 18   | I2C Clock (directly internal)      |
+| OLED RST    | 21   | Reset (directly internal)          |
+| Vext Power  | 36   | Must be LOW to power OLED         |
 
 ---
 

@@ -67,8 +67,9 @@
 #define VEXT_PIN          36    // Vext control - must be LOW to power OLED
 
 // Initialize OLED display (SSD1306 128x64 I2C)
-// Using software I2C to specify custom pins
-U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, OLED_SCL, OLED_SDA, OLED_RST);
+// Software I2C with explicit pin assignment for Heltec V4
+// Constructor: U8G2_SSD1306_128X64_NONAME_F_SW_I2C(rotation, clock, data, reset)
+U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ OLED_SCL, /* data=*/ OLED_SDA, /* reset=*/ U8X8_PIN_NONE);
 
 // ============================================================================
 // DSP Constants
@@ -1064,48 +1065,65 @@ void audioTask(void *pvParameters) {
 void setup() {
     // Start serial FIRST for debugging
     Serial.begin(115200);
-    delay(1000);  // Wait for serial to stabilize
-    Serial.println("\n\n=== Dub Siren ESP32 ===");
+    delay(2000);  // Wait for serial to stabilize and user to open monitor
+    Serial.println("\n\n=============================");
+    Serial.println("=== Dub Siren ESP32 ===");
     Serial.println("Heltec WiFi LoRa 32 V4");
+    Serial.println("=============================");
     Serial.println("Starting initialization...");
+    Serial.println("");
 
     // Enable Vext to power the OLED (Heltec specific)
-    // Vext must be LOW to enable power to peripherals
-    Serial.println("Enabling Vext...");
+    // On Heltec V4, Vext must be LOW to enable power to OLED
+    Serial.println("[1/5] Enabling Vext power...");
     pinMode(VEXT_PIN, OUTPUT);
-    digitalWrite(VEXT_PIN, LOW);
-    delay(100);  // Wait for power to stabilize
+    digitalWrite(VEXT_PIN, LOW);  // LOW = power ON for Heltec V4
+    delay(200);  // Wait for power to stabilize
+    Serial.println("      Vext enabled (GPIO 36 = LOW)");
 
-    // Reset OLED manually
-    Serial.println("Resetting OLED...");
+    // Reset OLED manually with proper timing
+    Serial.println("[2/5] Resetting OLED display...");
     pinMode(OLED_RST, OUTPUT);
-    digitalWrite(OLED_RST, LOW);
-    delay(50);
     digitalWrite(OLED_RST, HIGH);
-    delay(50);
+    delay(10);
+    digitalWrite(OLED_RST, LOW);
+    delay(100);  // Hold reset low
+    digitalWrite(OLED_RST, HIGH);
+    delay(100);  // Wait after reset
+    Serial.println("      OLED reset complete");
 
     // Initialize OLED display
-    Serial.println("Initializing display...");
+    Serial.println("[3/5] Initializing U8g2 display...");
+    Serial.print("      SDA=GPIO"); Serial.print(OLED_SDA);
+    Serial.print(" SCL=GPIO"); Serial.println(OLED_SCL);
+
     u8g2.begin();
+    Serial.println("      u8g2.begin() complete");
+
     u8g2.setContrast(255);  // Max brightness
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_helvB14_tr);
-    u8g2.drawStr(20, 35, "DUB SIREN");
+    u8g2.drawStr(10, 30, "DUB SIREN");
     u8g2.setFont(u8g2_font_helvR08_tr);
-    u8g2.drawStr(30, 50, "Initializing...");
+    u8g2.drawStr(10, 45, "Heltec V4");
+    u8g2.drawStr(10, 58, "Initializing...");
     u8g2.sendBuffer();
-    Serial.println("Display initialized!");
+    Serial.println("      Display initialized and showing splash!");
 
     // Configure buttons
-    Serial.println("Configuring buttons...");
+    Serial.println("[4/5] Configuring buttons...");
     pinMode(TRIGGER_BTN_PIN, INPUT_PULLUP);
     pinMode(WAVEFORM_BTN_PIN, INPUT_PULLUP);
     pinMode(PITCHENV_BTN_PIN, INPUT_PULLUP);
+    Serial.println("      PRG=GPIO0, BTN1=GPIO47, BTN2=GPIO48");
 
     // Initialize I2S
-    Serial.println("Initializing I2S...");
+    Serial.println("[5/5] Initializing I2S audio...");
+    Serial.print("      BCK=GPIO"); Serial.print(I2S_BCK_PIN);
+    Serial.print(" WS=GPIO"); Serial.print(I2S_WS_PIN);
+    Serial.print(" DATA=GPIO"); Serial.println(I2S_DATA_PIN);
     setupI2S();
-    debugPrint("I2S initialized");
+    Serial.println("      I2S initialized!");
 
     // Initialize interaction timer
     lastInteractionTime = millis();
@@ -1114,8 +1132,9 @@ void setup() {
     memset((void*)scopeBuffer, 0, sizeof(scopeBuffer));
 
     // Show initial display
+    Serial.println("");
+    Serial.println("===== SETUP COMPLETE =====");
     updateOLED();
-    debugPrint("System ready!");
 
     // Create audio task on Core 1
     xTaskCreatePinnedToCore(
