@@ -35,62 +35,84 @@ A classic dub siren synthesizer running on the ESP32 Heltec V4 board with I2S au
 
 ### Heltec WiFi LoRa 32 V4 Board Layout
 
-Based on actual board silkscreen (USB-C at top, antenna at bottom):
+Based on actual board photo (USB-C at top, antenna connectors at bottom):
 
 ```
                               [USB-C Port]
                     ┌──────────────────────────────────────┐
-                    │              ┌─┐  V4                 │
-                    │              └─┘                     │
+                    │              ┌─┐                     │
+                    │              └─┘  V4                 │
      [RST]  ────────┤■                                     │
                     │                                      │
-     [PRG]  ────────┤■                                     │
+     [PRG]  ────────┤■  (GPIO 0 - Trigger)                 │
+                    │                                      │
                     │  ┌────────────────────────────────┐  │
                     │  │                                │  │
                     │  │      HELTEC AUTOMATION         │  │
-                    │  │         0.96" OLED             │  │
-                    │  │         128 x 64               │  │
+                    │  │                                │  │
+                    │  │      0.96" OLED 128x64         │  │
+                    │  │      (SSD1306 I2C)             │  │
                     │  │                                │  │
                     │  └────────────────────────────────┘  │
                     │                                      │
-    ────────────────┼──────────────────────────────────────┼────────────────
+  LEFT SIDE         │                                      │         RIGHT SIDE
+  ──────────────────┼──────────────────────────────────────┼──────────────────
          Ve ────────┤ Vext                              2 ├──── GPIO 2
         GND ────────┤ GND                               3 ├──── GPIO 3
-     GPIO 36 ───────┤ 36                                4*├──── GPIO 4  ◄── I2S DATA
-     GPIO 35 ───────┤ 35                                5*├──── GPIO 5  ◄── I2S BCK
-     GPIO 34 ───────┤ 34                                6*├──── GPIO 6  ◄── I2S WS
+     GPIO 36 ───────┤ 36  (Vext ctrl)                  4*├──── GPIO 4  ◄── I2S DATA
+     GPIO 35 ───────┤ 35                               5*├──── GPIO 5  ◄── I2S BCK
+     GPIO 34 ───────┤ 34                               6*├──── GPIO 6  ◄── I2S WS
      GPIO 33 ───────┤ 33                                7 ├──── GPIO 7
      GPIO 26 ───────┤ 26                              GND ├──── GND
-     GPIO 21 ───────┤ 21                               5V ├──── 5V
+     GPIO 21 ───────┤ 21  (OLED RST)                   5V ├──── 5V
      GPIO 20 ───────┤ 20                              3V3 ├──── 3V3
      GPIO 19 ───────┤ 19                                  │
                     │                                      │
-                    │     ┌──┐                  ┌──┐       │
-                    │     │868                  │915       │
-                    └─────┴──┴──────────────────┴──┴───────┘
-                              [Antenna Connectors]
+                    │      ┌────┐            ┌────┐        │
+                    │      │ 868│            │ 915│        │
+                    └──────┴────┴────────────┴────┴────────┘
+                         [LoRa Antenna Connectors]
 
-    * = Used by this project for I2S audio
+    * = Used by this project for I2S audio (directly right side, top 3 data pins)
+```
+
+### Quick Reference - What to Connect
+
+```
+PCM5102 DAC          Heltec V4 (Right Side)
+───────────          ─────────────────────
+   BCK  ◄────────────  GPIO 5
+   LCK  ◄────────────  GPIO 6
+   DIN  ◄────────────  GPIO 4
+   VCC  ◄────────────  3V3
+   GND  ◄────────────  GND
+   SCK  ◄────────────  GND (tie to ground)
+   FMT  ◄────────────  GND (tie to ground)
+   XMT  ◄────────────  3V3 (tie high to unmute)
 ```
 
 ### Pin Assignments
 
-| Function          | GPIO | Location    | Description                        |
-|-------------------|------|-------------|------------------------------------|
-| **I2S DATA**      | 4    | Right side  | Audio Data to DAC                  |
-| **I2S BCK**       | 5    | Right side  | Bit Clock to DAC                   |
-| **I2S WS**        | 6    | Right side  | Word Select (LRCK) to DAC          |
-| **Trigger Button**| 0    | PRG button  | Built-in, active LOW               |
-| **Vext Control**  | 36   | Left side   | Powers OLED (LOW=ON)               |
+| Function           | GPIO | Physical Location          | Description                     |
+|--------------------|------|----------------------------|---------------------------------|
+| **I2S DATA**       | 4    | Right side, pin 4          | Audio data to DAC               |
+| **I2S BCK**        | 5    | Right side, pin 5          | Bit clock to DAC                |
+| **I2S WS**         | 6    | Right side, pin 6          | Word select (LRCK) to DAC       |
+| **Trigger**        | 0    | PRG button on board        | Hold to play, release to stop   |
+| **Vext Control**   | 36   | Left side, pin 36          | LOW = OLED power ON             |
+| **OLED SDA**       | 17   | Internal                   | I2C data (do not use)           |
+| **OLED SCL**       | 18   | Internal                   | I2C clock (do not use)          |
+| **OLED RST**       | 21   | Left side (internal use)   | Display reset (do not use)      |
 
-### Built-in OLED Display Pins (Internal - Do Not Use)
+### Internal Pins (directly managed - avoid using)
 
-| Function    | GPIO | Note                              |
-|-------------|------|-----------------------------------|
-| OLED SDA    | 17   | I2C Data (directly internal)       |
-| OLED SCL    | 18   | I2C Clock (directly internal)      |
-| OLED RST    | 21   | Reset (directly internal)          |
-| Vext Power  | 36   | Must be LOW to power OLED         |
+| Function       | GPIO | Note                                    |
+|----------------|------|-----------------------------------------|
+| OLED SDA       | 17   | I2C data for display                    |
+| OLED SCL       | 18   | I2C clock for display                   |
+| OLED RST       | 21   | Display reset                           |
+| Vext Control   | 36   | Must be LOW to power OLED               |
+| LoRa Pins      | Various | Used by LoRa module if enabled       |
 
 ---
 
