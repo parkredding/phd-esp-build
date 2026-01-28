@@ -35,84 +35,90 @@ A classic dub siren synthesizer running on the ESP32 Heltec V4 board with I2S au
 
 ### Heltec WiFi LoRa 32 V4 Board Layout
 
-Based on actual board photo (USB-C at top, antenna connectors at bottom):
+Based on official Heltec pin map (USB-C at bottom, antenna at top):
 
 ```
-                              [USB-C Port]
+                         [LoRa Antenna Area]
                     ┌──────────────────────────────────────┐
-                    │              ┌─┐                     │
-                    │              └─┘  V4                 │
-     [RST]  ────────┤■                                     │
-                    │                                      │
-     [PRG]  ────────┤■  (GPIO 0 - Trigger)                 │
                     │                                      │
                     │  ┌────────────────────────────────┐  │
                     │  │                                │  │
                     │  │      HELTEC AUTOMATION         │  │
-                    │  │                                │  │
-                    │  │      0.96" OLED 128x64         │  │
-                    │  │      (SSD1306 I2C)             │  │
+                    │  │         0.96" OLED             │  │
+                    │  │         128 x 64               │  │
                     │  │                                │  │
                     │  └────────────────────────────────┘  │
                     │                                      │
-  LEFT SIDE         │                                      │         RIGHT SIDE
+   HEADER J3        │            V4                        │        HEADER J2
+   (Left Side)      │                                      │       (Right Side)
   ──────────────────┼──────────────────────────────────────┼──────────────────
-         Ve ────────┤ Vext                              2 ├──── GPIO 2
-        GND ────────┤ GND                               3 ├──── GPIO 3
-     GPIO 36 ───────┤ 36  (Vext ctrl)                  4*├──── GPIO 4  ◄── I2S DATA
-     GPIO 35 ───────┤ 35                               5*├──── GPIO 5  ◄── I2S BCK
-     GPIO 34 ───────┤ 34                               6*├──── GPIO 6  ◄── I2S WS
-     GPIO 33 ───────┤ 33                                7 ├──── GPIO 7
-     GPIO 26 ───────┤ 26                              GND ├──── GND
-     GPIO 21 ───────┤ 21  (OLED RST)                   5V ├──── 5V
-     GPIO 20 ───────┤ 20                              3V3 ├──── 3V3
-     GPIO 19 ───────┤ 19                                  │
-                    │                                      │
-                    │      ┌────┐            ┌────┐        │
-                    │      │ 868│            │ 915│        │
-                    └──────┴────┴────────────┴────┴────────┘
-                         [LoRa Antenna Connectors]
+ 18  GPIO7 ─────────┤                                      ├───────── U1RST  19
+ 17  GPIO6* ────────┤ I2S WS ►                             ├───────── U1CTS  18
+ 16  GPIO5* ────────┤ I2S BCK ►                            ├───────── GPIO20 17
+ 15  GPIO4* ────────┤ I2S DATA ►                           ├───────── GPIO21 16 (OLED RST)
+ 14  GPIO3 ─────────┤                                      ├───────── GPIO26 15
+ 13  GPIO1 ─────────┤                                      ├───────── GPIO48 14
+ 12  GPIO2 ─────────┤                                      ├───────── GPIO47 13
+ 11  GPIO38 ────────┤                                      ├───────── GPIO33 12
+ 10  GPIO39 ────────┤                                      ├───────── GPIO34 11
+  9  GPIO40 ────────┤                                      ├───────── GPIO35 10
+  8  GPIO41 ────────┤                                      ├───────── GPIO36  9 (Vext Ctrl)
+  7  GPIO42 ────────┤                                      ├───────── GPIO0   8 ◄── PRG Button
+  6  GPIO45 ────────┤                                      ├───────── RST     7
+  5  GPIO46 ────────┤                                      ├───────── U0TXD   6
+  4  GPIO37 ────────┤                                      ├───────── U0RXD   5
+  3  3V3 ───────────┤                                      ├───────── Ve      4
+  2  3V3 ───────────┤                                      ├───────── Ve      3
+  1  GND ───────────┤         [PRG]  [RST]                 ├───────── 5V      2
+                    │              [USB-C]                 ├───────── GND     1
+                    └──────────────────────────────────────┘
 
-    * = Used by this project for I2S audio (directly right side, top 3 data pins)
+    * = I2S audio pins (LEFT side Header J3, pins 15-17)
 ```
 
 ### Quick Reference - What to Connect
 
 ```
-PCM5102 DAC          Heltec V4 (Right Side)
-───────────          ─────────────────────
-   BCK  ◄────────────  GPIO 5
-   LCK  ◄────────────  GPIO 6
-   DIN  ◄────────────  GPIO 4
-   VCC  ◄────────────  3V3
-   GND  ◄────────────  GND
-   SCK  ◄────────────  GND (tie to ground)
-   FMT  ◄────────────  GND (tie to ground)
-   XMT  ◄────────────  3V3 (tie high to unmute)
+PCM5102 DAC          Heltec V4 (LEFT Side - Header J3)
+───────────          ───────────────────────────────────
+   BCK  ◄────────────  GPIO 5  (J3 pin 16)
+   LCK  ◄────────────  GPIO 6  (J3 pin 17)
+   DIN  ◄────────────  GPIO 4  (J3 pin 15)
+   VCC  ◄────────────  3V3     (J3 pin 2 or 3)
+   GND  ◄────────────  GND     (J3 pin 1)
+   SCK  ◄────────────  GND     (tie to ground)
+   FMT  ◄────────────  GND     (tie to ground)
+   XMT  ◄────────────  3V3     (tie high to unmute)
 ```
 
 ### Pin Assignments
 
-| Function           | GPIO | Physical Location          | Description                     |
+| Function           | GPIO | Header & Pin               | Description                     |
 |--------------------|------|----------------------------|---------------------------------|
-| **I2S DATA**       | 4    | Right side, pin 4          | Audio data to DAC               |
-| **I2S BCK**        | 5    | Right side, pin 5          | Bit clock to DAC                |
-| **I2S WS**         | 6    | Right side, pin 6          | Word select (LRCK) to DAC       |
-| **Trigger**        | 0    | PRG button on board        | Hold to play, release to stop   |
-| **Vext Control**   | 36   | Left side, pin 36          | LOW = OLED power ON             |
-| **OLED SDA**       | 17   | Internal                   | I2C data (do not use)           |
-| **OLED SCL**       | 18   | Internal                   | I2C clock (do not use)          |
-| **OLED RST**       | 21   | Left side (internal use)   | Display reset (do not use)      |
+| **I2S DATA**       | 4    | J3 pin 15 (left side)      | Audio data to DAC               |
+| **I2S BCK**        | 5    | J3 pin 16 (left side)      | Bit clock to DAC                |
+| **I2S WS**         | 6    | J3 pin 17 (left side)      | Word select (LRCK) to DAC       |
+| **Trigger**        | 0    | J2 pin 8 (PRG button)      | Hold to play, release to stop   |
+| **Vext Control**   | 36   | J2 pin 9 (right side)      | LOW = OLED power ON             |
+| **OLED SDA**       | 17   | Top header (internal)      | I2C data (do not use)           |
+| **OLED SCL**       | 18   | Top header (internal)      | I2C clock (do not use)          |
+| **OLED RST**       | 21   | J2 pin 16 (internal use)   | Display reset (do not use)      |
 
-### Internal Pins (directly managed - avoid using)
+### Internal/Reserved Pins (avoid using)
 
-| Function       | GPIO | Note                                    |
-|----------------|------|-----------------------------------------|
-| OLED SDA       | 17   | I2C data for display                    |
-| OLED SCL       | 18   | I2C clock for display                   |
-| OLED RST       | 21   | Display reset                           |
-| Vext Control   | 36   | Must be LOW to power OLED               |
-| LoRa Pins      | Various | Used by LoRa module if enabled       |
+| Function       | GPIO     | Note                                    |
+|----------------|----------|-----------------------------------------|
+| OLED SDA       | 17       | I2C data for display                    |
+| OLED SCL       | 18       | I2C clock for display                   |
+| OLED RST       | 21       | Display reset                           |
+| Vext Control   | 36       | Must be LOW to power OLED               |
+| LoRa NSS       | 8        | LoRa chip select                        |
+| LoRa SCK       | 9        | LoRa SPI clock                          |
+| LoRa MOSI      | 10       | LoRa SPI data out                       |
+| LoRa MISO      | 11       | LoRa SPI data in                        |
+| LoRa RST       | 12       | LoRa reset                              |
+| LoRa BUSY      | 13       | LoRa busy signal                        |
+| LoRa DIO1      | 14       | LoRa interrupt                          |
 
 ---
 
@@ -121,24 +127,24 @@ PCM5102 DAC          Heltec V4 (Right Side)
 ### PCM5102 DAC Module Connection
 
 ```
-    HELTEC V4                         PCM5102 DAC MODULE
-    ─────────                         ──────────────────
+    HELTEC V4 (Header J3 - LEFT)      PCM5102 DAC MODULE
+    ────────────────────────────      ──────────────────
 
-        GPIO 5  ──────────────────────►  BCK  (Bit Clock)
+    J3 pin 16  GPIO 5  ───────────────►  BCK  (Bit Clock)
 
-        GPIO 6  ──────────────────────►  LCK  (Word Select / LRCK)
+    J3 pin 17  GPIO 6  ───────────────►  LCK  (Word Select / LRCK)
 
-        GPIO 4  ──────────────────────►  DIN  (Data In)
+    J3 pin 15  GPIO 4  ───────────────►  DIN  (Data In)
 
-          3V3   ──────────────────────►  VCC  (3.3V Power)
+    J3 pin 2   3V3     ───────────────►  VCC  (3.3V Power)
 
-          GND   ──────┬───────────────►  GND  (Ground)
-                      │
-                      ├───────────────►  SCK  (System Clock - tie to GND)
-                      │
-                      └───────────────►  FMT  (Format - tie to GND for I2S)
+    J3 pin 1   GND     ──────┬────────►  GND  (Ground)
+                             │
+                             ├────────►  SCK  (System Clock - tie to GND)
+                             │
+                             └────────►  FMT  (Format - tie to GND for I2S)
 
-          3V3   ──────────────────────►  XMT  (Soft Mute - tie HIGH to unmute)
+    J3 pin 2   3V3     ───────────────►  XMT  (Soft Mute - tie HIGH to unmute)
 
 
     PCM5102 AUDIO OUTPUT
@@ -161,16 +167,16 @@ PCM5102 DAC          Heltec V4 (Right Side)
                                     │  VCC ●────────────────┐             │
                                     │  GND ●──────────────┐ │             │
 ┌─────────────────────┐             │  BCK ●            │ │             │
-│                     │             │  LCK ●            │ │             │
-│   HELTEC V4         │             │  DIN ●            │ │ ┌─────────┐ │
-│                     │             │  SCK ●            │ │ │         │ │
-│              GPIO 5 ├─────────────┼──────┘            │ │ │  3.5mm  │ │
-│              GPIO 6 ├─────────────┼──────┘            │ │ │  Jack   │ │
-│              GPIO 4 ├─────────────┼──────┘            │ │ │   or    │ │
+│    HELTEC V4        │             │  LCK ●            │ │             │
+│                     │             │  DIN ●            │ │ ┌─────────┐ │
+│  Header J3 (LEFT):  │             │  SCK ●            │ │ │         │ │
+│    pin 16  GPIO 5 ──┼─────────────┼──────┘            │ │ │  3.5mm  │ │
+│    pin 17  GPIO 6 ──┼─────────────┼──────┘            │ │ │  Jack   │ │
+│    pin 15  GPIO 4 ──┼─────────────┼──────┘            │ │ │   or    │ │
 │                     │             │  FMT ●────────────┼─┤ │ Speaker │ │
-│                 3V3 ├─────────────┼──────────────────►├─┘ │         │ │
+│    pin 2   3V3 ─────┼─────────────┼──────────────────►├─┘ │         │ │
 │                     │             │  XMT ●────────────┘   └────┬────┘ │
-│                 GND ├─────────────┼──────────────────►GND      │      │
+│    pin 1   GND ─────┼─────────────┼──────────────────►GND      │      │
 │                     │             │                            │      │
 │  ┌───────────────┐  │             │  LOUT ●───────────────────►│      │
 │  │    OLED       │  │             │  ROUT ●───────────────────►│      │
@@ -181,13 +187,14 @@ PCM5102 DAC          Heltec V4 (Right Side)
 │   │                 │
 │   └── GPIO 0        │             ┌─────────────────────────────────────┐
 │       (Trigger)     │             │      OPTIONAL BUTTON CONTROLS       │
-│                     │             │                                     │
-│             GPIO 47 ├─────────────┤  ┌─────┐                            │
-│                     │             │  │ BTN │──► Waveform Cycle          │
-│             GPIO 48 ├─────────────┤  └──┬──┘                            │
-│                     │             │     │                               │
-│                 GND ├─────────────┤  ┌──┴──┐                            │
-│                     │             │  │ BTN │──► Pitch Envelope Cycle    │
+│   Header J2 pin 8   │             │                                     │
+│                     │             │  Header J2 (RIGHT):                 │
+│  Header J2 (RIGHT): │             │  ┌─────┐                            │
+│  pin 13  GPIO 47 ───┼─────────────┤  │ BTN │──► Waveform Cycle          │
+│                     │             │  └──┬──┘                            │
+│  pin 14  GPIO 48 ───┼─────────────┤     │                               │
+│                     │             │  ┌──┴──┐                            │
+│  pin 1   GND ───────┼─────────────┤  │ BTN │──► Pitch Envelope Cycle    │
 └─────────────────────┘             │  └──┬──┘                            │
                                     │     │                               │
                                     │    GND                              │
