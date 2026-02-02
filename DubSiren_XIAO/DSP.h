@@ -1,8 +1,8 @@
 /*
  * DubSiren ESP32 DSP Library - XIAO Edition
- * Optimized for limited RAM on XIAO ESP32S3
+ * For XIAO ESP32S3 with 8MB PSRAM
  *
- * Reduced delay buffer, no reverb
+ * Full DSP chain: Oscillator, LFO, Envelope, Filter, Delay, Reverb
  */
 
 #ifndef DSP_H
@@ -16,7 +16,7 @@
 // ============================================================================
 
 constexpr int SAMPLE_RATE = 44100;
-constexpr int BUFFER_SIZE = 128;  // Smaller buffer for XIAO
+constexpr int BUFFER_SIZE = 128;
 constexpr float PI_F = 3.14159265358979323846f;
 constexpr float TWO_PI_F = 2.0f * PI_F;
 
@@ -273,12 +273,12 @@ private:
 };
 
 // ============================================================================
-// DELAY - Compact version for XIAO (0.5 second max)
+// DELAY - Full version with PSRAM (1 second max)
 // ============================================================================
 
 class DelayEffect {
 public:
-    static constexpr int MAX_DELAY_SAMPLES = 22050;  // 0.5 seconds
+    static constexpr int MAX_DELAY_SAMPLES = 44100;  // 1 second with PSRAM
 
     DelayEffect() : delayTime(0.25f), feedback(0.4f), dryWet(0.3f),
                    writePos(0), currentDelay(0.0f), lpState(0.0f) {
@@ -288,7 +288,7 @@ public:
     }
 
     void setDelayTime(float seconds) {
-        delayTime = clampF(seconds, 0.01f, 0.5f);
+        delayTime = clampF(seconds, 0.01f, 1.0f);
         targetDelay = delayTime * SAMPLE_RATE;
     }
 
@@ -354,6 +354,130 @@ public:
 private:
     float xPrev;
     float yPrev;
+};
+
+// ============================================================================
+// REVERB - Dub-style spring/room reverb
+// ============================================================================
+
+class ReverbEffect {
+public:
+    // Comb filter delay lengths (in samples) - tuned for dub character
+    static constexpr int COMB1_LEN = 1557;
+    static constexpr int COMB2_LEN = 1617;
+    static constexpr int COMB3_LEN = 1491;
+    static constexpr int COMB4_LEN = 1422;
+
+    // Allpass filter delay lengths
+    static constexpr int AP1_LEN = 225;
+    static constexpr int AP2_LEN = 556;
+    static constexpr int AP3_LEN = 441;
+
+    ReverbEffect() : roomSize(0.7f), damping(0.4f), dryWet(0.3f) {
+        // Initialize all buffers to zero
+        memset(comb1, 0, sizeof(comb1));
+        memset(comb2, 0, sizeof(comb2));
+        memset(comb3, 0, sizeof(comb3));
+        memset(comb4, 0, sizeof(comb4));
+        memset(ap1, 0, sizeof(ap1));
+        memset(ap2, 0, sizeof(ap2));
+        memset(ap3, 0, sizeof(ap3));
+
+        comb1Idx = comb2Idx = comb3Idx = comb4Idx = 0;
+        ap1Idx = ap2Idx = ap3Idx = 0;
+        lp1 = lp2 = lp3 = lp4 = 0.0f;
+
+        updateCoefficients();
+    }
+
+    void setRoomSize(float size) {
+        roomSize = clampF(size, 0.0f, 1.0f);
+        updateCoefficients();
+    }
+
+    void setDamping(float damp) {
+        damping = clampF(damp, 0.0f, 1.0f);
+        updateCoefficients();
+    }
+
+    void setDryWet(float mix) {
+        dryWet = clampF(mix, 0.0f, 1.0f);
+    }
+
+    float process(float input) {
+        float wet = 0.0f;
+
+        // Parallel comb filters with damping
+        wet += processComb(input, comb1, comb1Idx, COMB1_LEN, lp1);
+        wet += processComb(input, comb2, comb2Idx, COMB2_LEN, lp2);
+        wet += processComb(input, comb3, comb3Idx, COMB3_LEN, lp3);
+        wet += processComb(input, comb4, comb4Idx, COMB4_LEN, lp4);
+
+        wet *= 0.25f;  // Average the comb outputs
+
+        // Series allpass filters for diffusion
+        wet = processAllpass(wet, ap1, ap1Idx, AP1_LEN);
+        wet = processAllpass(wet, ap2, ap2Idx, AP2_LEN);
+        wet = processAllpass(wet, ap3, ap3Idx, AP3_LEN);
+
+        // Mix dry and wet
+        return input * (1.0f - dryWet) + wet * dryWet;
+    }
+
+    float getRoomSize() const { return roomSize; }
+    float getDryWet() const { return dryWet; }
+
+private:
+    // Comb filter buffers
+    float comb1[COMB1_LEN];
+    float comb2[COMB2_LEN];
+    float comb3[COMB3_LEN];
+    float comb4[COMB4_LEN];
+    int comb1Idx, comb2Idx, comb3Idx, comb4Idx;
+    float lp1, lp2, lp3, lp4;  // Lowpass states for damping
+
+    // Allpass filter buffers
+    float ap1[AP1_LEN];
+    float ap2[AP2_LEN];
+    float ap3[AP3_LEN];
+    int ap1Idx, ap2Idx, ap3Idx;
+
+    // Parameters
+    float roomSize;
+    float damping;
+    float dryWet;
+    float feedback;
+    float dampCoeff;
+
+    void updateCoefficients() {
+        feedback = 0.7f + roomSize * 0.28f;  // 0.7 to 0.98
+        dampCoeff = damping * 0.4f;  // Damping amount
+    }
+
+    float processComb(float input, float* buffer, int& idx, int len, float& lpState) {
+        float output = buffer[idx];
+
+        // Lowpass filter in feedback path (damping)
+        lpState = output * (1.0f - dampCoeff) + lpState * dampCoeff;
+
+        // Write new sample with feedback
+        buffer[idx] = input + lpState * feedback;
+
+        // Advance index
+        idx = (idx + 1) % len;
+
+        return output;
+    }
+
+    float processAllpass(float input, float* buffer, int& idx, int len) {
+        float delayed = buffer[idx];
+        float output = delayed - input;
+
+        buffer[idx] = input + delayed * 0.5f;
+        idx = (idx + 1) % len;
+
+        return output;
+    }
 };
 
 #endif // DSP_H

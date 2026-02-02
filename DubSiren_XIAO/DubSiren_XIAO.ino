@@ -10,8 +10,10 @@
  * - Preset Button (D3): Tap to cycle through NJD presets
  * - Trigger Button (D2): Hold to make sound
  *
- * Hardware: Seeed XIAO ESP32S3 (also works on Teyleten Supermini ESP32S3)
+ * Hardware: Seeed XIAO ESP32S3 with 8MB PSRAM
  * Audio: PCM5102 Purple Board I2S DAC
+ *
+ * Full DSP: Oscillator, LFO, Envelope, Filter, Delay, Reverb
  */
 
 #include <driver/i2s.h>
@@ -65,20 +67,23 @@ struct SoundPreset {
     float delayTime;
     float delayFeedback;
     float delayMix;
+    float reverbSize;
+    float reverbMix;
     float releaseTime;
 };
 
 // NJD Dub Presets - Roots, Steppers, and Heavyweight sounds
+// With reverb for that classic dub sound
 const SoundPreset njdPresets[] = {
-    // name,            freq,  lfoRate, lfoDepth, wave,              cutoff, res,  delay, fb,   mix,  release
-    {"Roots Classic",   440,   2.5,     0.5,      Waveform::Square,  2000,   0.4,  0.375, 0.55, 0.35, 0.6},
-    {"Steppers",        380,   4.0,     0.6,      Waveform::Square,  2500,   0.3,  0.25,  0.5,  0.3,  0.4},
-    {"King Tubby",      330,   1.5,     0.7,      Waveform::Square,  1200,   0.6,  0.5,   0.7,  0.45, 1.0},
-    {"Scientist",       520,   3.5,     0.45,     Waveform::Square,  1800,   0.5,  0.333, 0.6,  0.4,  0.5},
-    {"Mad Professor",   280,   2.0,     0.8,      Waveform::Saw,     1000,   0.7,  0.45,  0.65, 0.5,  0.8},
-    {"Iration",         660,   5.0,     0.4,      Waveform::Square,  3000,   0.25, 0.2,   0.45, 0.25, 0.3},
-    {"Channel One",     220,   1.0,     0.6,      Waveform::Square,  800,    0.65, 0.5,   0.75, 0.5,  1.2},
-    {"Heavyweight",     165,   0.8,     0.9,      Waveform::Saw,     600,    0.8,  0.45,  0.8,  0.55, 1.5},
+    // name,            freq,  lfoRate, lfoDepth, wave,              cutoff, res,  delay, fb,   dMix, rSize,rMix, release
+    {"Roots Classic",   440,   2.5,     0.5,      Waveform::Square,  2000,   0.4,  0.375, 0.55, 0.35, 0.6,  0.25, 0.6},
+    {"Steppers",        380,   4.0,     0.6,      Waveform::Square,  2500,   0.3,  0.25,  0.5,  0.3,  0.5,  0.2,  0.4},
+    {"King Tubby",      330,   1.5,     0.7,      Waveform::Square,  1200,   0.6,  0.5,   0.7,  0.45, 0.8,  0.4,  1.0},
+    {"Scientist",       520,   3.5,     0.45,     Waveform::Square,  1800,   0.5,  0.333, 0.6,  0.4,  0.65, 0.3,  0.5},
+    {"Mad Professor",   280,   2.0,     0.8,      Waveform::Saw,     1000,   0.7,  0.45,  0.65, 0.5,  0.75, 0.35, 0.8},
+    {"Iration",         660,   5.0,     0.4,      Waveform::Square,  3000,   0.25, 0.2,   0.45, 0.25, 0.4,  0.15, 0.3},
+    {"Channel One",     220,   1.0,     0.6,      Waveform::Square,  800,    0.65, 0.5,   0.75, 0.5,  0.85, 0.45, 1.2},
+    {"Heavyweight",     165,   0.8,     0.9,      Waveform::Saw,     600,    0.8,  0.45,  0.8,  0.55, 0.9,  0.5,  1.5},
 };
 
 const int NUM_PRESETS = sizeof(njdPresets) / sizeof(njdPresets[0]);
@@ -92,6 +97,7 @@ LFO lfo;
 Envelope env;
 LowPassFilter filter;
 DelayEffect delayFx;
+ReverbEffect reverbFx;
 DCBlocker dcBlock;
 
 // ============================================================================
@@ -139,10 +145,12 @@ void applyPreset(int presetIndex) {
     delayFx.setDelayTime(p.delayTime);
     delayFx.setFeedback(p.delayFeedback);
     delayFx.setDryWet(p.delayMix);
+    reverbFx.setRoomSize(p.reverbSize);
+    reverbFx.setDryWet(p.reverbMix);
     env.setRelease(p.releaseTime);
 
-    Serial.printf("NJD Preset %d: %s (%.0fHz, %.1fHz LFO)\n",
-                  presetIndex, p.name, p.baseFreq, p.lfoRate);
+    Serial.printf("NJD Preset %d: %s (%.0fHz, %.1fHz LFO, %.0f%% reverb)\n",
+                  presetIndex, p.name, p.baseFreq, p.lfoRate, p.reverbMix * 100);
 }
 
 // ============================================================================
@@ -305,6 +313,11 @@ void generateAudio() {
         // Delay
         if (p.delayMix > 0.01f) {
             sample = delayFx.process(sample);
+        }
+
+        // Reverb
+        if (p.reverbMix > 0.01f) {
+            sample = reverbFx.process(sample);
         }
 
         // DC blocking and soft clip
