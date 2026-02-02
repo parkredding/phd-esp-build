@@ -33,12 +33,12 @@ Before wiring audio, configure the PCM5102 board jumpers/pads:
 ### XIAO Pin Reference
 | Physical Pin | Silkscreen | GPIO | Function in DubSiren |
 |--------------|------------|------|----------------------|
-| 1 | D0 | GPIO1 | Encoder CLK |
-| 2 | D1 | GPIO2 | Encoder DT |
-| 3 | D2 | GPIO3 | Trigger Button |
-| 4 | D3 | GPIO4 | Modifier Button |
-| 5 | D4 | GPIO5 | (available) |
-| 6 | D5 | GPIO6 | (available) |
+| 1 | D0 | GPIO1 | Encoder 1 CLK (Pitch) |
+| 2 | D1 | GPIO2 | Encoder 1 DT (Pitch) |
+| 3 | D2 | GPIO3 | Trigger Button (hold to play) |
+| 4 | D3 | GPIO4 | Preset Button (tap to cycle) |
+| 5 | D4 | GPIO5 | Encoder 2 CLK (LFO Rate) |
+| 6 | D5 | GPIO6 | Encoder 2 DT (LFO Rate) |
 | 7 | D6 | GPIO43 | (available) |
 | 8 | 5V | — | (power input) |
 | 9 | GND | — | Ground |
@@ -63,12 +63,12 @@ FMT  ●────────────────────────
 XMT  ●────────────────────────● 3V3  (Pin 10)
 ```
 
-### Control Wiring (XIAO)
+### Control Wiring (XIAO NJD Edition)
 
-**Rotary Encoder (KY-040 or similar)**
+**Encoder 1 - Pitch Control (KY-040 or similar)**
 ```
-Encoder                       XIAO ESP32S3
-───────                       ────────────
+Encoder 1                     XIAO ESP32S3
+─────────                     ────────────
 GND  ●────────────────────────● GND  (Pin 9)
 +    ●────────────────────────● 3V3  (Pin 10)
 CLK  ●────────────────────────● D0   (Pin 1, GPIO1)
@@ -76,15 +76,26 @@ DT   ●────────────────────────
 SW   ●──── (not used) ────────
 ```
 
+**Encoder 2 - LFO Rate Control**
+```
+Encoder 2                     XIAO ESP32S3
+─────────                     ────────────
+GND  ●────────────────────────● GND  (Pin 9)
++    ●────────────────────────● 3V3  (Pin 10)
+CLK  ●────────────────────────● D4   (Pin 5, GPIO5)
+DT   ●────────────────────────● D5   (Pin 6, GPIO6)
+SW   ●──── (not used) ────────
+```
+
 **Buttons (active low with internal pullup)**
 ```
-Trigger Button                XIAO ESP32S3
-──────────────                ────────────
+Trigger Button (HOLD TO PLAY) XIAO ESP32S3
+───────────────────────────── ────────────
 One leg  ●────────────────────● D2   (Pin 3, GPIO3)
 Other leg ●───────────────────● GND  (Pin 9)
 
-Modifier Button               XIAO ESP32S3
-───────────────               ────────────
+Preset Button (TAP TO CYCLE)  XIAO ESP32S3
+───────────────────────────── ────────────
 One leg  ●────────────────────● D3   (Pin 4, GPIO4)
 Other leg ●───────────────────● GND  (Pin 9)
 ```

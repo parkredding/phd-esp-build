@@ -1,16 +1,17 @@
 /*
- * DubSiren XIAO - Noisemaker Edition
+ * DubSiren XIAO - NJD Edition
  *
- * A compact, preset-based dub siren for the Seeed XIAO ESP32S3
- * Perfect for instant noise-making fun!
+ * A hands-on dub siren for the Seeed XIAO ESP32S3
+ * Two encoders for real-time control, button to cycle presets
  *
  * Controls:
- * - 1 Rotary Encoder: Scroll through sound presets
- * - 1 Trigger Button: Hold to make sound
- * - 1 Modifier Button: Shifts to alternate preset bank
+ * - Encoder 1 (D0/D1): Pitch control
+ * - Encoder 2 (D4/D5): LFO Rate control
+ * - Preset Button (D3): Tap to cycle through NJD presets
+ * - Trigger Button (D2): Hold to make sound
  *
  * Hardware: Seeed XIAO ESP32S3 (also works on Teyleten Supermini ESP32S3)
- * Audio: MAX98357A or PCM5102 I2S DAC
+ * Audio: PCM5102 Purple Board I2S DAC
  */
 
 #include <driver/i2s.h>
@@ -26,15 +27,19 @@
 #define I2S_LRCK        8     // Pin 13 / D9  / GPIO8  -> PCM5102 LCK
 #define I2S_DOUT        9     // Pin 14 / D10 / GPIO9  -> PCM5102 DIN
 
-// Rotary Encoder (preset selection)
-#define ENC_CLK         1     // Pin 1 / D0 / GPIO1
-#define ENC_DT          2     // Pin 2 / D1 / GPIO2
+// Encoder 1 - Pitch Control
+#define ENC1_CLK        1     // Pin 1 / D0 / GPIO1
+#define ENC1_DT         2     // Pin 2 / D1 / GPIO2
+
+// Encoder 2 - LFO Rate Control
+#define ENC2_CLK        5     // Pin 5 / D4 / GPIO5
+#define ENC2_DT         6     // Pin 6 / D5 / GPIO6
 
 // Buttons
-#define BTN_TRIGGER     3     // Pin 3 / D2 / GPIO3 - Main trigger
-#define BTN_MODIFIER    4     // Pin 4 / D3 / GPIO4 - Alt bank
+#define BTN_TRIGGER     3     // Pin 3 / D2 / GPIO3 - Hold to play
+#define BTN_PRESET      4     // Pin 4 / D3 / GPIO4 - Tap to cycle preset
 
-// Status LED (optional - XIAO has built-in LED)
+// Status LED
 #define LED_STATUS      LED_BUILTIN
 
 // ============================================================================
@@ -46,7 +51,7 @@
 #define I2S_BUFFER_SIZE 128
 
 // ============================================================================
-// SOUND PRESETS
+// NJD SOUND PRESETS - Classic Dub Siren Tones
 // ============================================================================
 
 struct SoundPreset {
@@ -63,33 +68,20 @@ struct SoundPreset {
     float releaseTime;
 };
 
-// Bank A - Classic Dub Sirens
-const SoundPreset presetsA[] = {
-    // name,        freq,  lfoRate, lfoDepth, wave,            cutoff, res,  delay, fb,   mix,  release
-    {"Classic",     440,   3.0,     0.5,      Waveform::Square, 2500,  0.3,  0.25,  0.5,  0.3,  0.5},
-    {"Slow Sweep",  330,   0.5,     0.7,      Waveform::Square, 1500,  0.5,  0.4,   0.6,  0.4,  1.0},
-    {"Fast Alarm",  880,   8.0,     0.3,      Waveform::Square, 4000,  0.2,  0.1,   0.3,  0.2,  0.2},
-    {"Deep Bass",   110,   1.5,     0.6,      Waveform::Saw,    800,   0.6,  0.3,   0.5,  0.3,  0.8},
-    {"Sci-Fi",      660,   12.0,    0.4,      Waveform::Saw,    3000,  0.4,  0.15,  0.4,  0.25, 0.3},
-    {"Police",      700,   4.0,     0.8,      Waveform::Square, 5000,  0.1,  0.0,   0.0,  0.0,  0.1},
-    {"Submarine",   80,    0.3,     0.9,      Waveform::Sine,   400,   0.7,  0.5,   0.7,  0.5,  1.5},
-    {"Laser",       1200,  20.0,    0.2,      Waveform::Saw,    6000,  0.3,  0.05,  0.2,  0.15, 0.15},
+// NJD Dub Presets - Roots, Steppers, and Heavyweight sounds
+const SoundPreset njdPresets[] = {
+    // name,            freq,  lfoRate, lfoDepth, wave,              cutoff, res,  delay, fb,   mix,  release
+    {"Roots Classic",   440,   2.5,     0.5,      Waveform::Square,  2000,   0.4,  0.375, 0.55, 0.35, 0.6},
+    {"Steppers",        380,   4.0,     0.6,      Waveform::Square,  2500,   0.3,  0.25,  0.5,  0.3,  0.4},
+    {"King Tubby",      330,   1.5,     0.7,      Waveform::Square,  1200,   0.6,  0.5,   0.7,  0.45, 1.0},
+    {"Scientist",       520,   3.5,     0.45,     Waveform::Square,  1800,   0.5,  0.333, 0.6,  0.4,  0.5},
+    {"Mad Professor",   280,   2.0,     0.8,      Waveform::Saw,     1000,   0.7,  0.45,  0.65, 0.5,  0.8},
+    {"Iration",         660,   5.0,     0.4,      Waveform::Square,  3000,   0.25, 0.2,   0.45, 0.25, 0.3},
+    {"Channel One",     220,   1.0,     0.6,      Waveform::Square,  800,    0.65, 0.5,   0.75, 0.5,  1.2},
+    {"Heavyweight",     165,   0.8,     0.9,      Waveform::Saw,     600,    0.8,  0.45,  0.8,  0.55, 1.5},
 };
 
-// Bank B - Experimental / Weird
-const SoundPreset presetsB[] = {
-    // name,        freq,  lfoRate, lfoDepth, wave,              cutoff, res,  delay, fb,   mix,  release
-    {"Wobble",      200,   6.0,     0.8,      Waveform::Square,  1000,  0.7,  0.2,   0.6,  0.4,  0.6},
-    {"Drone",       55,    0.1,     0.3,      Waveform::Saw,     600,   0.8,  0.45,  0.8,  0.5,  2.0},
-    {"Glitch",      500,   15.0,    0.5,      Waveform::Square,  2000,  0.5,  0.08,  0.7,  0.35, 0.1},
-    {"Haunted",     220,   0.7,     0.6,      Waveform::Triangle,900,   0.6,  0.5,   0.75, 0.45, 1.2},
-    {"Robot",       350,   10.0,    0.4,      Waveform::Square,  1800,  0.4,  0.12,  0.5,  0.3,  0.25},
-    {"UFO",         600,   25.0,    0.3,      Waveform::Sine,    4000,  0.2,  0.1,   0.4,  0.2,  0.2},
-    {"Monster",     60,    2.0,     0.7,      Waveform::Saw,     500,   0.75, 0.35,  0.65, 0.4,  1.0},
-    {"Chaos",       440,   30.0,    0.6,      Waveform::Saw,     3500,  0.5,  0.07,  0.8,  0.4,  0.3},
-};
-
-const int NUM_PRESETS = sizeof(presetsA) / sizeof(presetsA[0]);
+const int NUM_PRESETS = sizeof(njdPresets) / sizeof(njdPresets[0]);
 
 // ============================================================================
 // DSP OBJECTS
@@ -107,13 +99,21 @@ DCBlocker dcBlock;
 // ============================================================================
 
 int currentPreset = 0;
-bool useAltBank = false;
 bool triggered = false;
 volatile bool triggerFlag = false;
 volatile bool releaseFlag = false;
 
-// Encoder state
-int8_t encLastState = 0;
+// Live parameters (modified by encoders)
+float livePitch = 440.0f;
+float liveLfoRate = 2.5f;
+
+// Encoder states
+int8_t enc1LastState = 0;
+int8_t enc2LastState = 0;
+
+// Preset button debounce
+unsigned long lastPresetPress = 0;
+const unsigned long DEBOUNCE_MS = 200;
 
 // Audio buffer
 int16_t audioBuffer[I2S_BUFFER_SIZE * 2];
@@ -123,11 +123,16 @@ int16_t audioBuffer[I2S_BUFFER_SIZE * 2];
 // ============================================================================
 
 void applyPreset(int presetIndex) {
-    const SoundPreset& p = useAltBank ? presetsB[presetIndex] : presetsA[presetIndex];
+    const SoundPreset& p = njdPresets[presetIndex];
 
-    osc.setFrequency(p.baseFreq);
+    // Set live parameters from preset (can be tweaked with encoders)
+    livePitch = p.baseFreq;
+    liveLfoRate = p.lfoRate;
+
+    // Apply fixed preset parameters
+    osc.setFrequency(livePitch);
     osc.setWaveform(p.waveform);
-    lfo.setFrequency(p.lfoRate);
+    lfo.setFrequency(liveLfoRate);
     lfo.setDepth(p.lfoDepth);
     filter.setCutoff(p.filterCutoff);
     filter.setResonance(p.filterRes);
@@ -136,25 +141,26 @@ void applyPreset(int presetIndex) {
     delayFx.setDryWet(p.delayMix);
     env.setRelease(p.releaseTime);
 
-    Serial.printf("Preset %d: %s\n", presetIndex, p.name);
+    Serial.printf("NJD Preset %d: %s (%.0fHz, %.1fHz LFO)\n",
+                  presetIndex, p.name, p.baseFreq, p.lfoRate);
 }
 
 // ============================================================================
 // ENCODER READING
 // ============================================================================
 
-int readEncoder() {
+int readEncoder(int clkPin, int dtPin, int8_t& lastState) {
     int change = 0;
-    int clkState = digitalRead(ENC_CLK);
+    int clkState = digitalRead(clkPin);
 
-    if (clkState != encLastState) {
-        if (digitalRead(ENC_DT) != clkState) {
+    if (clkState != lastState) {
+        if (digitalRead(dtPin) != clkState) {
             change = 1;
         } else {
             change = -1;
         }
     }
-    encLastState = clkState;
+    lastState = clkState;
     return change;
 }
 
@@ -170,15 +176,25 @@ void IRAM_ATTR onTriggerChange() {
     }
 }
 
-void initButtons() {
-    pinMode(BTN_TRIGGER, INPUT_PULLUP);
-    pinMode(BTN_MODIFIER, INPUT_PULLUP);
-    pinMode(ENC_CLK, INPUT_PULLUP);
-    pinMode(ENC_DT, INPUT_PULLUP);
+void initHardware() {
+    // Encoder 1 pins
+    pinMode(ENC1_CLK, INPUT_PULLUP);
+    pinMode(ENC1_DT, INPUT_PULLUP);
 
+    // Encoder 2 pins
+    pinMode(ENC2_CLK, INPUT_PULLUP);
+    pinMode(ENC2_DT, INPUT_PULLUP);
+
+    // Button pins
+    pinMode(BTN_TRIGGER, INPUT_PULLUP);
+    pinMode(BTN_PRESET, INPUT_PULLUP);
+
+    // Trigger interrupt
     attachInterrupt(digitalPinToInterrupt(BTN_TRIGGER), onTriggerChange, CHANGE);
 
-    encLastState = digitalRead(ENC_CLK);
+    // Initialize encoder states
+    enc1LastState = digitalRead(ENC1_CLK);
+    enc2LastState = digitalRead(ENC2_CLK);
 }
 
 // ============================================================================
@@ -217,21 +233,36 @@ void initI2S() {
 // ============================================================================
 
 void updateControls() {
-    // Check modifier button for bank switch
-    bool modPressed = !digitalRead(BTN_MODIFIER);
-    if (modPressed != useAltBank) {
-        useAltBank = modPressed;
-        applyPreset(currentPreset);
-        digitalWrite(LED_STATUS, useAltBank ? HIGH : LOW);
+    // Preset button - cycle through presets on press
+    if (digitalRead(BTN_PRESET) == LOW) {
+        unsigned long now = millis();
+        if (now - lastPresetPress > DEBOUNCE_MS) {
+            lastPresetPress = now;
+            currentPreset = (currentPreset + 1) % NUM_PRESETS;
+            applyPreset(currentPreset);
+
+            // Flash LED
+            digitalWrite(LED_STATUS, HIGH);
+            delay(50);
+            digitalWrite(LED_STATUS, LOW);
+        }
     }
 
-    // Encoder for preset selection
-    int change = readEncoder();
-    if (change != 0) {
-        currentPreset += change;
-        if (currentPreset < 0) currentPreset = NUM_PRESETS - 1;
-        if (currentPreset >= NUM_PRESETS) currentPreset = 0;
-        applyPreset(currentPreset);
+    // Encoder 1 - Pitch control
+    int pitchChange = readEncoder(ENC1_CLK, ENC1_DT, enc1LastState);
+    if (pitchChange != 0) {
+        // Logarithmic pitch scaling for musical feel
+        float pitchMultiplier = (pitchChange > 0) ? 1.02f : 0.98f;
+        livePitch = clampF(livePitch * pitchMultiplier, 50.0f, 2000.0f);
+        Serial.printf("Pitch: %.1f Hz\n", livePitch);
+    }
+
+    // Encoder 2 - LFO Rate control
+    int lfoChange = readEncoder(ENC2_CLK, ENC2_DT, enc2LastState);
+    if (lfoChange != 0) {
+        liveLfoRate = clampF(liveLfoRate + (lfoChange * 0.2f), 0.1f, 30.0f);
+        lfo.setFrequency(liveLfoRate);
+        Serial.printf("LFO Rate: %.1f Hz\n", liveLfoRate);
     }
 }
 
@@ -253,12 +284,12 @@ void generateAudio() {
         env.release();
     }
 
-    const SoundPreset& p = useAltBank ? presetsB[currentPreset] : presetsA[currentPreset];
+    const SoundPreset& p = njdPresets[currentPreset];
 
     for (int i = 0; i < I2S_BUFFER_SIZE; i++) {
-        // LFO modulation
+        // LFO modulation using live pitch
         float lfoVal = lfo.generate();
-        float modFreq = p.baseFreq * (1.0f + lfoVal * 0.5f);
+        float modFreq = livePitch * (1.0f + lfoVal * p.lfoDepth);
         osc.setFrequency(modFreq);
 
         // Generate sound
@@ -271,7 +302,7 @@ void generateAudio() {
         // Filter
         sample = filter.process(sample);
 
-        // Delay (if enabled for this preset)
+        // Delay
         if (p.delayMix > 0.01f) {
             sample = delayFx.process(sample);
         }
@@ -298,24 +329,28 @@ void generateAudio() {
 void setup() {
     Serial.begin(115200);
     delay(100);
-    Serial.println("\n=== DubSiren XIAO Noisemaker ===");
-    Serial.println("Encoder: Change preset");
-    Serial.println("Trigger: Hold to play");
-    Serial.println("Modifier: Hold for Bank B\n");
+    Serial.println("\n========================================");
+    Serial.println("    DubSiren XIAO - NJD Edition");
+    Serial.println("========================================");
+    Serial.println("Encoder 1 (D0/D1): Pitch");
+    Serial.println("Encoder 2 (D4/D5): LFO Rate");
+    Serial.println("Button (D3): Cycle Preset");
+    Serial.println("Button (D2): TRIGGER - Hold to play");
+    Serial.println("----------------------------------------\n");
 
     // LED
     pinMode(LED_STATUS, OUTPUT);
     digitalWrite(LED_STATUS, LOW);
 
     // Initialize hardware
-    initButtons();
+    initHardware();
     initI2S();
 
     // Load first preset
     env.setAttack(0.01f);
     applyPreset(0);
 
-    Serial.println("Ready! Make some noise!");
+    Serial.println("\nReady! Hold trigger and twist the knobs!");
 }
 
 // ============================================================================
