@@ -22,17 +22,17 @@
 
 // I2S Audio Output to PCM5102 Purple Board
 // PCM5102: VIN->3V3, GND->GND, SCK->GND, FMT->GND, XMT->3V3
-#define I2S_BCLK        7     // XIAO D7 / GPIO7 -> PCM5102 BCK
-#define I2S_LRCK        8     // XIAO D8 / GPIO8 -> PCM5102 LCK
-#define I2S_DOUT        9     // XIAO D9 / GPIO9 -> PCM5102 DIN
+#define I2S_BCLK        7     // Pin 12 / D8  / GPIO7  -> PCM5102 BCK
+#define I2S_LRCK        8     // Pin 13 / D9  / GPIO8  -> PCM5102 LCK
+#define I2S_DOUT        9     // Pin 14 / D10 / GPIO9  -> PCM5102 DIN
 
 // Rotary Encoder (preset selection)
-#define ENC_CLK         1     // XIAO D0 / GPIO1
-#define ENC_DT          2     // XIAO D1 / GPIO2
+#define ENC_CLK         1     // Pin 1 / D0 / GPIO1
+#define ENC_DT          2     // Pin 2 / D1 / GPIO2
 
 // Buttons
-#define BTN_TRIGGER     3     // XIAO D2 / GPIO3 - Main trigger
-#define BTN_MODIFIER    4     // XIAO D3 / GPIO4 - Alt bank
+#define BTN_TRIGGER     3     // Pin 3 / D2 / GPIO3 - Main trigger
+#define BTN_MODIFIER    4     // Pin 4 / D3 / GPIO4 - Alt bank
 
 // Status LED (optional - XIAO has built-in LED)
 #define LED_STATUS      LED_BUILTIN
