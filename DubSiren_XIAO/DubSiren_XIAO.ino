@@ -20,18 +20,19 @@
 // PIN DEFINITIONS - XIAO ESP32S3
 // ============================================================================
 
-// I2S Audio Output
-#define I2S_BCLK        D7    // GPIO44 - Bit clock
-#define I2S_LRCK        D8    // GPIO43 - Word select
-#define I2S_DOUT        D9    // GPIO1  - Data out
+// I2S Audio Output to PCM5102 Purple Board
+// PCM5102: VIN->3V3, GND->GND, SCK->GND, FMT->GND, XMT->3V3
+#define I2S_BCLK        7     // XIAO D7 / GPIO7 -> PCM5102 BCK
+#define I2S_LRCK        8     // XIAO D8 / GPIO8 -> PCM5102 LCK
+#define I2S_DOUT        9     // XIAO D9 / GPIO9 -> PCM5102 DIN
 
 // Rotary Encoder (preset selection)
-#define ENC_CLK         D0    // GPIO1
-#define ENC_DT          D1    // GPIO2
+#define ENC_CLK         1     // XIAO D0 / GPIO1
+#define ENC_DT          2     // XIAO D1 / GPIO2
 
 // Buttons
-#define BTN_TRIGGER     D2    // GPIO3 - Main trigger
-#define BTN_MODIFIER    D3    // GPIO4 - Alt bank
+#define BTN_TRIGGER     3     // XIAO D2 / GPIO3 - Main trigger
+#define BTN_MODIFIER    4     // XIAO D3 / GPIO4 - Alt bank
 
 // Status LED (optional - XIAO has built-in LED)
 #define LED_STATUS      LED_BUILTIN

@@ -16,41 +16,43 @@
 #include "DSP.h"
 
 // ============================================================================
-// PIN DEFINITIONS - Heltec V3
+// PIN DEFINITIONS - Heltec WiFi LoRa 32 V3
 // ============================================================================
 
-// I2S Audio Output (directly accessible pins on Heltec V3)
-#define I2S_BCLK        26    // Bit clock
-#define I2S_LRCK        25    // Word select / LR clock
-#define I2S_DOUT        33    // Data out
+// I2S Audio Output to PCM5102 Purple Board
+// PCM5102: VIN->3V3, GND->GND, SCK->GND, FMT->GND, XMT->3V3
+#define I2S_BCLK        47    // -> PCM5102 BCK
+#define I2S_LRCK        48    // -> PCM5102 LCK
+#define I2S_DOUT        26    // -> PCM5102 DIN
 
-// Rotary Encoders (directly accessible on Heltec V3)
+// Rotary Encoders - using available GPIO on Heltec V3
+// Note: GPIO 17,18,21 reserved for OLED; GPIO 19 is VEXT
 // Encoder 1: LFO Depth / LFO Rate (Bank B)
-#define ENC1_CLK        36
-#define ENC1_DT         37
+#define ENC1_CLK        6
+#define ENC1_DT         7
 
 // Encoder 2: Base Frequency / Delay Time (Bank B)
-#define ENC2_CLK        38
-#define ENC2_DT         39
+#define ENC2_CLK        5
+#define ENC2_DT         4
 
 // Encoder 3: Filter Cutoff / Filter Resonance (Bank B)
-#define ENC3_CLK        40
-#define ENC3_DT         41
+#define ENC3_CLK        3
+#define ENC3_DT         2
 
 // Encoder 4: Delay Feedback / Waveform Select (Bank B)
-#define ENC4_CLK        42
-#define ENC4_DT         2
+#define ENC4_CLK        1
+#define ENC4_DT         38
 
 // Encoder 5: Dry/Wet Mix / Release Time (Bank B)
-#define ENC5_CLK        1
-#define ENC5_DT         3
+#define ENC5_CLK        39
+#define ENC5_DT         40
 
 // Buttons
-#define BTN_TRIGGER     4     // Main trigger button
-#define BTN_SHIFT       5     // Shift for Bank B access
-#define BTN_MODE        6     // Mode/preset button
+#define BTN_TRIGGER     41    // Main trigger button
+#define BTN_SHIFT       42    // Shift for Bank B access
+#define BTN_MODE        46    // Mode/preset button
 
-// OLED (Heltec built-in)
+// OLED (Heltec built-in SSD1306 0.96")
 #define OLED_SDA        17
 #define OLED_SCL        18
 #define OLED_RST        21
