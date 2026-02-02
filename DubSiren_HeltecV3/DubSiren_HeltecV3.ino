@@ -4,15 +4,16 @@
  * A complete dub siren synthesizer with:
  * - 5 rotary encoders (10 parameters via bank switching)
  * - 3 momentary buttons (trigger, shift, mode)
- * - OLED display for parameter feedback
- * - Full DSP: Oscillator, LFO, Filter, Delay, Envelope
+ * - Built-in OLED display for parameter feedback
+ * - Full DSP: Oscillator, LFO, Filter, Delay, Reverb, Envelope
  *
- * Hardware: Heltec WiFi LoRa 32 V3 (ESP32-S3)
- * Audio: PCM5102 or MAX98357A I2S DAC
+ * Hardware: Heltec WiFi LoRa 32 V3 (ESP32-S3) - Meshtastic edition
+ * Audio: PCM5102 Purple Board I2S DAC
  */
 
 #include <driver/i2s.h>
 #include <Wire.h>
+#include <U8g2lib.h>
 #include "DSP.h"
 
 // ============================================================================
@@ -43,7 +44,7 @@
 #define ENC4_CLK        1
 #define ENC4_DT         38
 
-// Encoder 5: Dry/Wet Mix / Release Time (Bank B)
+// Encoder 5: Reverb Mix / Reverb Size (Bank B)
 #define ENC5_CLK        39
 #define ENC5_DT         40
 
@@ -56,6 +57,17 @@
 #define OLED_SDA        17
 #define OLED_SCL        18
 #define OLED_RST        21
+
+// ============================================================================
+// OLED DISPLAY
+// ============================================================================
+
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C display(U8G2_R0, OLED_RST, OLED_SCL, OLED_SDA);
+
+// Display update timing
+unsigned long lastDisplayUpdate = 0;
+const unsigned long DISPLAY_UPDATE_MS = 50;  // 20 FPS
+bool displayNeedsUpdate = true;
 
 // ============================================================================
 // I2S CONFIGURATION
@@ -74,6 +86,7 @@ LFO lfo;
 Envelope env;
 LowPassFilter filter;
 DelayEffect delayFx;
+ReverbEffect reverbFx;
 DCBlocker dcBlock;
 
 // ============================================================================
@@ -85,13 +98,14 @@ float lfoDepth = 0.5f;
 float baseFrequency = 440.0f;
 float filterCutoff = 3000.0f;
 float delayFeedback = 0.5f;
-float dryWetMix = 0.4f;
+float reverbMix = 0.3f;
 
 // Bank B parameters (shift + encoder)
 float lfoRate = 2.0f;
 float delayTime = 0.375f;
 float filterResonance = 0.3f;
 Waveform currentWaveform = Waveform::Square;
+float reverbSize = 0.7f;
 float releaseTime = 0.5f;
 
 // State
@@ -100,15 +114,24 @@ bool triggered = false;
 volatile bool triggerFlag = false;
 volatile bool releaseFlag = false;
 
+// Track which parameter changed for display
+int lastChangedParam = -1;
+unsigned long lastParamChangeTime = 0;
+
 // Encoder state
 int8_t encLastState[5] = {0};
-int32_t encValues[5] = {0};
 
 // ============================================================================
 // AUDIO BUFFER
 // ============================================================================
 
 int16_t audioBuffer[I2S_BUFFER_SIZE * 2];  // Stereo
+
+// ============================================================================
+// WAVEFORM NAMES
+// ============================================================================
+
+const char* waveformNames[] = {"SIN", "SQR", "SAW", "TRI"};
 
 // ============================================================================
 // ENCODER READING
@@ -203,6 +226,100 @@ void initI2S() {
 }
 
 // ============================================================================
+// OLED DISPLAY
+// ============================================================================
+
+void initDisplay() {
+    display.begin();
+    display.setFont(u8g2_font_6x10_tf);
+    display.clearBuffer();
+    display.drawStr(20, 30, "DUB SIREN");
+    display.drawStr(25, 45, "Heltec V3");
+    display.sendBuffer();
+    delay(1000);
+}
+
+void updateDisplay() {
+    unsigned long now = millis();
+    if (now - lastDisplayUpdate < DISPLAY_UPDATE_MS) return;
+    lastDisplayUpdate = now;
+
+    display.clearBuffer();
+
+    // Title bar
+    display.setFont(u8g2_font_6x10_tf);
+    if (triggered) {
+        display.drawBox(0, 0, 128, 12);
+        display.setDrawColor(0);
+        display.drawStr(4, 10, ">>> PLAYING <<<");
+        display.setDrawColor(1);
+    } else {
+        display.drawStr(4, 10, shiftPressed ? "BANK B" : "BANK A");
+        display.drawStr(80, 10, waveformNames[(int)currentWaveform]);
+    }
+
+    // Draw horizontal line
+    display.drawHLine(0, 13, 128);
+
+    // Parameters - two columns
+    display.setFont(u8g2_font_5x7_tf);
+
+    if (!shiftPressed) {
+        // Bank A
+        char buf[20];
+
+        // Left column
+        sprintf(buf, "LFO D: %d%%", (int)(lfoDepth * 100));
+        display.drawStr(2, 24, buf);
+
+        sprintf(buf, "FREQ: %dHz", (int)baseFrequency);
+        display.drawStr(2, 34, buf);
+
+        sprintf(buf, "FILT: %dHz", (int)filterCutoff);
+        display.drawStr(2, 44, buf);
+
+        // Right column
+        sprintf(buf, "DLY FB: %d%%", (int)(delayFeedback * 100));
+        display.drawStr(66, 24, buf);
+
+        sprintf(buf, "VERB: %d%%", (int)(reverbMix * 100));
+        display.drawStr(66, 34, buf);
+    } else {
+        // Bank B
+        char buf[20];
+
+        // Left column
+        sprintf(buf, "LFO R: %.1fHz", lfoRate);
+        display.drawStr(2, 24, buf);
+
+        sprintf(buf, "DLY T: %dms", (int)(delayTime * 1000));
+        display.drawStr(2, 34, buf);
+
+        sprintf(buf, "FILT Q: %d%%", (int)(filterResonance * 100));
+        display.drawStr(2, 44, buf);
+
+        // Right column
+        sprintf(buf, "WAVE: %s", waveformNames[(int)currentWaveform]);
+        display.drawStr(66, 24, buf);
+
+        sprintf(buf, "ROOM: %d%%", (int)(reverbSize * 100));
+        display.drawStr(66, 34, buf);
+
+        sprintf(buf, "REL: %.1fs", releaseTime);
+        display.drawStr(66, 44, buf);
+    }
+
+    // Bottom bar - envelope level meter
+    display.drawFrame(2, 54, 124, 8);
+    int meterWidth = (int)(env.getValue() * 120);
+    if (meterWidth > 0) {
+        display.drawBox(4, 56, meterWidth, 4);
+    }
+
+    display.sendBuffer();
+}
+
+// ============================================================================
 // PARAMETER UPDATE
 // ============================================================================
 
@@ -213,6 +330,10 @@ void updateParameters() {
         int change = readEncoder(i);
         if (change == 0) continue;
 
+        displayNeedsUpdate = true;
+        lastChangedParam = i + (shiftPressed ? 5 : 0);
+        lastParamChangeTime = millis();
+
         float delta = change * 0.02f;  // Sensitivity
 
         if (!shiftPressed) {
@@ -222,7 +343,7 @@ void updateParameters() {
                 case 1: baseFrequency = clampF(baseFrequency + change * 10.0f, 50.0f, 2000.0f); break;
                 case 2: filterCutoff = clampF(filterCutoff + change * 100.0f, 100.0f, 10000.0f); break;
                 case 3: delayFeedback = clampF(delayFeedback + delta, 0.0f, 0.95f); break;
-                case 4: dryWetMix = clampF(dryWetMix + delta, 0.0f, 1.0f); break;
+                case 4: reverbMix = clampF(reverbMix + delta, 0.0f, 1.0f); break;
             }
         } else {
             // Bank B
@@ -238,7 +359,7 @@ void updateParameters() {
                         currentWaveform = (Waveform)(((int)currentWaveform + 3) % 4);
                     }
                     break;
-                case 4: releaseTime = clampF(releaseTime + delta * 2.0f, 0.05f, 3.0f); break;
+                case 4: reverbSize = clampF(reverbSize + delta, 0.0f, 1.0f); break;
             }
         }
     }
@@ -251,7 +372,9 @@ void updateParameters() {
     filter.setResonance(filterResonance);
     delayFx.setDelayTime(delayTime);
     delayFx.setFeedback(delayFeedback);
-    delayFx.setDryWet(dryWetMix);
+    delayFx.setDryWet(0.5f);  // Fixed delay mix
+    reverbFx.setRoomSize(reverbSize);
+    reverbFx.setDryWet(reverbMix);
     env.setRelease(releaseTime);
 }
 
@@ -293,6 +416,9 @@ void generateAudio() {
         // Delay
         sample = delayFx.process(sample);
 
+        // Reverb
+        sample = reverbFx.process(sample);
+
         // DC blocking
         sample = dcBlock.process(sample);
 
@@ -318,7 +444,10 @@ void generateAudio() {
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("DubSiren Heltec V3 - Full Build");
+    Serial.println("DubSiren Heltec V3 - Full Build with OLED");
+
+    // Initialize display first for visual feedback
+    initDisplay();
 
     // Initialize hardware
     initEncoders();
@@ -334,7 +463,9 @@ void setup() {
     filter.setResonance(filterResonance);
     delayFx.setDelayTime(delayTime);
     delayFx.setFeedback(delayFeedback);
-    delayFx.setDryWet(dryWetMix);
+    delayFx.setDryWet(0.5f);
+    reverbFx.setRoomSize(reverbSize);
+    reverbFx.setDryWet(reverbMix);
     env.setAttack(0.01f);
     env.setRelease(releaseTime);
 
@@ -351,4 +482,7 @@ void loop() {
 
     // Generate and output audio
     generateAudio();
+
+    // Update display (throttled internally)
+    updateDisplay();
 }
